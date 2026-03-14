@@ -1,0 +1,9 @@
+faster-whisper
+pyaudio
+mss
+Pillow
+requests
+numpy
+pystray
+pywin32
+torch

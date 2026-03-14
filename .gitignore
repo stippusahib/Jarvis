@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+._*
+
+# Faster-Whisper model cache (downloaded at runtime)
+# Models are cached in user home, not project dir
+
+# PyInstaller
+*.spec
+
+# Logs
+*.log
+
+# Byte-compiled
+*.pyc
+
+# Distribution
+*.tar.gz
+*.zip
+
+# Gemini / Agent metadata
+.gemini/
+.agent/
+.agents/
+_agent/
+_agents/
+
+# Local brainstorming / notes
+SKILLS/
