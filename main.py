@@ -114,7 +114,7 @@ def run_live(overlay, screen):
                     suggestion = get_suggestion(audio_text, screen_b64)
                     if suggestion != "SILENT":
                         print(f"⚡ Suggestion: {suggestion}")
-                        overlay.show_popup(suggestion, audio_text)
+                        overlay.show_popup(suggestion)
                     else:
                         print("   (SILENT)")
             except Exception:
@@ -124,7 +124,6 @@ def run_live(overlay, screen):
         audio.stop()
         screen.stop()
         sys.exit(0)
-
 
 def main():
     demo_mode = "--demo" in sys.argv

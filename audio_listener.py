@@ -122,13 +122,13 @@ class AudioListener:
                 for s in segments:
                     # avg_logprob is log probability. e^-0.35 is ~0.70 confidence (70%)
                     # no_speech_prob is probability the segment is just noise/silence
-                    if s.avg_logprob > -0.35 and s.no_speech_prob < 0.3:
+                    if s.no_speech_prob < 0.8:
                         valid_segments.append(s.text)
                 
                 text = " ".join(valid_segments).strip()
 
                 # Debounce check
-                if text and len(text) > 20:
+                if text and len(text) > 15:
                     # Hallucination filter — reject transcriptions with fake/nonsense words
                     common_real_words = set([
                         "the", "and", "for", "you", "that", "this", "with", "have",
@@ -148,7 +148,7 @@ class AudioListener:
                         continue
 
                     ratio = difflib.SequenceMatcher(None, self.last_text, text).ratio()
-                    if ratio < 0.5:
+                    if ratio < 0.7:
                         self.output_queue.put(text)
                         self.last_text = text
 
