@@ -344,6 +344,25 @@ def get_suggestion(audio_text, screen_b64=None, regenerate=False, force_vision=F
     if model is None:
         return "SILENT"
 
+    # Quick answers — fire instantly before any processing
+    audio_lower_quick = audio_text.lower()
+
+    if any(w in audio_lower_quick for w in ["what time", "what's the time", "current time", "time now", "time is it", "the time"]):
+        from datetime import datetime
+        now = datetime.now()
+        return f"It's {now.strftime('%I:%M %p')} — {now.strftime('%A')}."
+
+    if any(w in audio_lower_quick for w in ["what date", "today's date", "what day", "current date", "the date"]):
+        from datetime import datetime
+        now = datetime.now()
+        return f"Today is {now.strftime('%A, %B %d %Y')}."
+
+    if any(w in audio_lower_quick for w in ["who are you", "what are you", "introduce yourself"]):
+        return "JARVIS — offline ambient AI. I see your screen, hear you, store nothing."
+
+    if any(w in audio_lower_quick for w in ["how are you", "you okay", "you good"]):
+        return "Running clean — zero disk writes, full attention on you."
+
     # Pre-filter hallucinated transcriptions
     if not regenerate and not force_vision:
         words = audio_text.lower().split()
@@ -361,27 +380,6 @@ def get_suggestion(audio_text, screen_b64=None, regenerate=False, force_vision=F
         if len(words) > 3 and real_count == 0:
             return "SILENT"
 
-    # Quick answers for common questions JARVIS can handle offline
-    audio_lower_quick = audio_text.lower()
-
-    if any(w in audio_lower_quick for w in ["what time", "what's the time", "current time", "time now", "time is it"]):
-        from datetime import datetime
-        now = datetime.now()
-        return f"It's {now.strftime('%I:%M %p')} — {now.strftime('%A')}."
-
-    if any(w in audio_lower_quick for w in ["what date", "today's date", "what day", "current date"]):
-        from datetime import datetime
-        now = datetime.now()
-        return f"Today is {now.strftime('%A, %B %d %Y')}."
-
-    if any(w in audio_lower_quick for w in ["what's the weather", "weather today", "is it raining"]):
-        return "I'm fully offline — check a weather app for current conditions."
-
-    if any(w in audio_lower_quick for w in ["who are you", "what are you", "introduce yourself"]):
-        return "JARVIS — offline ambient AI. I see your screen, hear you, store nothing."
-
-    if any(w in audio_lower_quick for w in ["how are you", "you okay", "you good"]):
-        return "Running clean — zero disk writes, full attention on you."
 
     # Smart vision trigger — skip if file context will handle it
     audio_lower = audio_text.lower()
