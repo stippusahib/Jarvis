@@ -44,6 +44,7 @@ class AudioListener:
         self.output_queue = queue.Queue()
         self.running = False
         self.last_text = ""
+        self.last_text_time = 0.0
 
         # Mic device auto-selection
         self._pa = pyaudio.PyAudio()
@@ -147,10 +148,16 @@ class AudioListener:
                         gc.collect()
                         continue
 
+                    # Auto-reset debounce after 15 seconds — new topic always passes
+                    current_time = time.time()
+                    if current_time - self.last_text_time > 15:
+                        self.last_text = ""
+
                     ratio = difflib.SequenceMatcher(None, self.last_text, text).ratio()
                     if ratio < 0.7:
                         self.output_queue.put(text)
                         self.last_text = text
+                        self.last_text_time = current_time
 
                 del audio_array, frames
                 gc.collect()
