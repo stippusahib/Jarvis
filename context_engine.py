@@ -361,9 +361,28 @@ def get_suggestion(audio_text, screen_b64=None, regenerate=False, force_vision=F
         if len(words) > 3 and real_count == 0:
             return "SILENT"
 
-    # Smart vision trigger
+    # Quick answers for common questions JARVIS can handle offline
+    audio_lower_quick = audio_text.lower()
+
+    if any(w in audio_lower_quick for w in ["what time", "what's the time", "current time", "time now", "time is it"]):
+        return "I'm fully offline — check your taskbar for current time."
+
+    if any(w in audio_lower_quick for w in ["what date", "today's date", "what day", "current date"]):
+        return "I'm fully offline — check your taskbar for today's date."
+
+    if any(w in audio_lower_quick for w in ["what's the weather", "weather today", "is it raining"]):
+        return "I'm fully offline — check a weather app for current conditions."
+
+    if any(w in audio_lower_quick for w in ["who are you", "what are you", "introduce yourself"]):
+        return "JARVIS — offline ambient AI. I see your screen, hear you, store nothing."
+
+    if any(w in audio_lower_quick for w in ["how are you", "you okay", "you good"]):
+        return "Running clean — zero disk writes, full attention on you."
+
+    # Smart vision trigger — skip if file context will handle it
     audio_lower = audio_text.lower()
-    should_scan = force_vision or any(kw in audio_lower for kw in VISION_TRIGGER_KEYWORDS)
+    has_file_trigger = is_file_mention(audio_text)
+    should_scan = not has_file_trigger and (force_vision or any(kw in audio_lower for kw in VISION_TRIGGER_KEYWORDS))
 
     screen_description = ""
     if screen_b64 and should_scan:
