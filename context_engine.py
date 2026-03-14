@@ -365,10 +365,14 @@ def get_suggestion(audio_text, screen_b64=None, regenerate=False, force_vision=F
     audio_lower_quick = audio_text.lower()
 
     if any(w in audio_lower_quick for w in ["what time", "what's the time", "current time", "time now", "time is it"]):
-        return "I'm fully offline — check your taskbar for current time."
+        from datetime import datetime
+        now = datetime.now()
+        return f"It's {now.strftime('%I:%M %p')} — {now.strftime('%A')}."
 
     if any(w in audio_lower_quick for w in ["what date", "today's date", "what day", "current date"]):
-        return "I'm fully offline — check your taskbar for today's date."
+        from datetime import datetime
+        now = datetime.now()
+        return f"Today is {now.strftime('%A, %B %d %Y')}."
 
     if any(w in audio_lower_quick for w in ["what's the weather", "weather today", "is it raining"]):
         return "I'm fully offline — check a weather app for current conditions."
