@@ -123,7 +123,7 @@ def run_live(overlay, screen):
                     suggestion = get_suggestion(audio_text, screen_b64)
                     if suggestion != "SILENT":
                         print(f"⚡ Suggestion: {suggestion}")
-                        overlay.show_popup(suggestion)
+                        overlay.show_popup(suggestion, "hotkey screen scan")
                     else:
                         print("   (SILENT)")
             except Exception:
@@ -149,13 +149,13 @@ def setup_hotkey(overlay, screen):
                 print("🔑 No screen capture yet — waiting for first capture...")
                 return
             suggestion = get_suggestion(
-                "user triggered instant screen scan",
+                "Analyze this screen carefully. If there is code visible, identify bugs, errors, or improvements. If there is a diagram, describe it. Give specific actionable feedback.",
                 screen_b64,
                 force_vision=True
             )
             if suggestion and suggestion != "SILENT":
                 print(f"🔑 Hotkey suggestion: {suggestion}")
-                overlay.show_popup(suggestion)
+                overlay.show_popup(suggestion, "hotkey screen scan")
             else:
                 print("🔑 Nothing specific found on screen")
         except Exception as e:

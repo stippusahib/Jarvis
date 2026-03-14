@@ -19,7 +19,7 @@ from file_reader import read_file_context
 OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
 OLLAMA_TAGS_URL = "http://127.0.0.1:11434/api/tags"
 OLLAMA_VISION_URL = "http://127.0.0.1:11434/api/chat"
-PREFERRED_MODELS = ["mistral", "llama3.2"]
+PREFERRED_MODELS = ["qwen2.5", "mistral", "llama3.2"]
 LIGHTWEIGHT_MODELS = ["phi3:mini", "tinyllama"]
 LLAVA_MODELS = ["llava", "llava:latest", "llava:7b"]
 _active_model_main = None
@@ -196,6 +196,22 @@ def detect_vision_model() -> str | None:
     return None
 
 
+def _compress_for_vision(screen_b64: str) -> str:
+    """Resize image to 800x450 for faster LLaVA processing without losing readability."""
+    try:
+        import base64 as b64lib
+        import io as _io
+        from PIL import Image as _Image
+        img_bytes = b64lib.b64decode(screen_b64)
+        img = _Image.open(_io.BytesIO(img_bytes))
+        img.thumbnail((800, 450), _Image.LANCZOS)
+        buf = _io.BytesIO()
+        img.save(buf, format="JPEG", quality=50)
+        return b64lib.b64encode(buf.getvalue()).decode("utf-8")
+    except Exception:
+        return screen_b64  # fallback to original if compression fails
+
+
 def get_screen_description(screen_b64: str) -> str:
     """Use LLaVA to describe what is visible on screen.
     Detects code, errors, diagrams, documents.
@@ -216,15 +232,13 @@ def get_screen_description(screen_b64: str) -> str:
             "messages": [{
                 "role": "user",
                 "content": (
-                    "Analyze this screen carefully and describe in 3-4 sentences:\n"
-                    "1. What application or tool is open?\n"
-                    "2. What specific code, text, errors, or content is visible?\n"
-                    "3. If there is code — mention function names, variable names, error messages, line numbers\n"
-                    "4. If there is a diagram or image — describe what it shows\n"
-                    "5. If there are error messages — quote them exactly\n"
-                    "Be specific and technical. Avoid vague descriptions."
+                    "In 2 sentences max describe: "
+                    "1) What app is open "
+                    "2) Any visible code, errors, or key text. "
+                    "Be specific — mention function names, variable names, or error messages if visible. "
+                    "No generic descriptions."
                 ),
-                "images": [screen_b64]
+                "images": [_compress_for_vision(screen_b64)]
             }],
             "stream": False,
             "options": {"num_predict": 200, "temperature": 0.2}
