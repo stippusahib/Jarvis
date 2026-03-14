@@ -150,23 +150,18 @@ class AudioListener:
                         gc.collect()
                         continue
 
-                    # Wake word detection — only process if JARVIS is addressed
+                    # Wake word detection — enhance if JARVIS is addressed
                     text_lower = text.lower()
                     has_wake_word = any(wake in text_lower for wake in self.WAKE_WORDS)
 
-                    if not has_wake_word:
-                        # No wake word — silently discard
-                        del audio_array, frames
-                        gc.collect()
-                        continue
-
-                    # Strip wake word from text before sending to LLM
-                    cleaned = text_lower
-                    for wake in sorted(self.WAKE_WORDS, key=len, reverse=True):
-                        cleaned = cleaned.replace(wake, "").strip()
-                    # Use cleaned text if meaningful, else original
-                    if len(cleaned) > 3:
-                        text = cleaned
+                    if has_wake_word:
+                        # Strip wake word from text before sending to LLM
+                        cleaned = text_lower
+                        for wake in sorted(self.WAKE_WORDS, key=len, reverse=True):
+                            cleaned = cleaned.replace(wake, "").strip()
+                        # Use cleaned text if meaningful, else original
+                        if len(cleaned) > 3:
+                            text = cleaned
 
                     # Auto-reset debounce after 12 seconds — new topic always passes
                     current_time = time.time()
