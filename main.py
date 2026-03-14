@@ -43,9 +43,9 @@ def privacy_audit():
             # Check for open() calls
             func_name = ""
             if isinstance(node.func, ast.Name):
-                func_name = node.func.id
+                func_name = str(getattr(node.func, "id", ""))
             elif isinstance(node.func, ast.Attribute):
-                func_name = node.func.attr
+                func_name = str(getattr(node.func, "attr", ""))
 
             if func_name != "open":
                 continue
@@ -56,12 +56,14 @@ def privacy_audit():
             # Check keyword args
             for kw in node.keywords:
                 if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
-                    if any(m in str(kw.value.value) for m in write_modes):
+                    val = str(getattr(kw.value, "value", ""))
+                    if any(m in val for m in write_modes):
                         violations.append(filename)
 
             # Check second positional arg
             if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
-                if any(m in str(node.args[1].value) for m in write_modes):
+                val = str(getattr(node.args[1], "value", ""))
+                if any(m in val for m in write_modes):
                     violations.append(filename)
 
     if violations:
@@ -112,13 +114,13 @@ def run_live(overlay, screen):
                     suggestion = get_suggestion(audio_text, screen_b64)
                     if suggestion != "SILENT":
                         print(f"⚡ Suggestion: {suggestion}")
-                        overlay.show_popup(suggestion)
+                        overlay.show_popup(suggestion, audio_text)
                     else:
                         print("   (SILENT)")
             except Exception:
                 continue
     except KeyboardInterrupt:
-        print("\n🧠 Brain offline. Clean.")
+        print("\n🧠 JARVIS offline. Clean.")
         audio.stop()
         screen.stop()
         sys.exit(0)
@@ -145,10 +147,10 @@ def main():
     tray = create_tray_icon(lambda: (root.quit(), sys.exit(0)))
 
     if demo_mode:
-        print("🧠 Second Brain, Live — DEMO MODE")
+        print("🧠 JARVIS, Live — DEMO MODE")
         t = threading.Thread(target=run_demo, args=(overlay,), daemon=True)
     else:
-        print("🧠 Second Brain, Live — LIVE MODE")
+        print("🧠 JARVIS, Live — LIVE MODE")
         t = threading.Thread(target=run_live, args=(overlay, screen), daemon=True)
 
     t.start()

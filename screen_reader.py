@@ -36,7 +36,7 @@ class ScreenReader:
                 try:
                     import ctypes
                     if self._overlay_hwnd:
-                        ctypes.windll.user32.ShowWindow(self._overlay_hwnd, 0)  # SW_HIDE
+                        ctypes.windll.user32.ShowWindow(self._overlay_hwnd, 0)  # type: ignore
                 except Exception:
                     pass
 

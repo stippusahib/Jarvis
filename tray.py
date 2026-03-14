@@ -18,14 +18,14 @@ def create_tray_icon(stop_callback):
         img = Image.new("RGB", (64, 64), color="#0A0A0A")
         draw = ImageDraw.Draw(img)
         draw.ellipse([8, 8, 56, 56], fill="#E8FF47")
-        draw.text((20, 18), "SB", fill="#0A0A0A")
+        draw.text((20, 18), "JV", fill="#0A0A0A")
 
         icon = pystray.Icon(
-            name="Second Brain, Live",
+            name="JARVIS, Live",
             icon=img,
-            title="Second Brain — watching silently",
+            title="JARVIS — watching silently",
             menu=pystray.Menu(
-                pystray.MenuItem("Second Brain, Live — Active", lambda icon, item: None, enabled=False),
+                pystray.MenuItem("JARVIS, Live — Active", lambda icon, item: None, enabled=False),
                 pystray.MenuItem("Quit", lambda icon, item: stop_callback())
             )
         )

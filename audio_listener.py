@@ -7,6 +7,15 @@ import queue
 import time
 import difflib
 import numpy as np
+import scipy.io.wavfile as wavfile
+import io
+
+try:
+    import noisereduce as nr
+    HAS_NOISEREDUCE = True
+except ImportError:
+    HAS_NOISEREDUCE = False
+
 from faster_whisper import WhisperModel
 
 
@@ -29,7 +38,7 @@ class AudioListener:
             device = "cpu"
             compute = "int8"
 
-        self.model = WhisperModel("tiny", device=device, compute_type=compute)
+        self.model = WhisperModel("small", device=device, compute_type=compute)
         print(f"🎙️  Whisper loaded on: {device.upper()}")
 
         self.output_queue = queue.Queue()
@@ -85,21 +94,61 @@ class AudioListener:
                 # Convert to numpy float32 array
                 audio_array = np.frombuffer(b"".join(frames), dtype=np.int16).astype(np.float32) / 32768.0
 
+                # Audio Pre-processing: Apply noise reduction
+                # Treat the first 0.5s as a noise profile if possible, or just apply stationary reduction
+                if HAS_NOISEREDUCE:
+                    audio_array = nr.reduce_noise(y=audio_array, sr=self.RATE, prop_decrease=0.8, stationary=True)
+
                 # Check audio energy — skip silent frames before calling Whisper
                 energy = float(np.abs(audio_array).mean())
-                if energy < 0.005:
+                if energy < 0.001:
                     del audio_array, frames
                     gc.collect()
                     continue
 
+                # Prompting / Custom Glossary: inject context
+                custom_prompt = "Alfie, Tippu, Stippu, file, document, code, architecture, plan, JARVIS, summary, project, meeting."
+
                 # Transcribe with Whisper — vad_filter=False to keep short speech
-                segments, _ = self.model.transcribe(audio_array, language="en", vad_filter=False)
-                text = " ".join([s.text for s in segments]).strip()
+                segments, info = self.model.transcribe(
+                    audio_array, 
+                    language="en", 
+                    vad_filter=False,
+                    initial_prompt=custom_prompt
+                )
+                
+                # Confidence Filtering: Only use segments with high probability
+                valid_segments = []
+                for s in segments:
+                    # avg_logprob is log probability. e^-0.35 is ~0.70 confidence (70%)
+                    # no_speech_prob is probability the segment is just noise/silence
+                    if s.avg_logprob > -0.35 and s.no_speech_prob < 0.3:
+                        valid_segments.append(s.text)
+                
+                text = " ".join(valid_segments).strip()
 
                 # Debounce check
-                if text and len(text) > 3:
+                if text and len(text) > 20:
+                    # Hallucination filter — reject transcriptions with fake/nonsense words
+                    common_real_words = set([
+                        "the", "and", "for", "you", "that", "this", "with", "have",
+                        "file", "code", "loop", "data", "read", "sent", "plan", "check",
+                        "slow", "fast", "error", "function", "meeting", "project", "did",
+                        "nested", "running", "looking", "working", "trying", "need", "know",
+                        "think", "said", "your", "our", "can", "will", "should", "would",
+                        "alfie", "tippu", "hey", "did", "read", "send", "share", "open"
+                    ])
+                    text_words = set(text.lower().split())
+                    real_word_count = len(text_words.intersection(common_real_words))
+                    total_words = len(text_words)
+                    if total_words > 3 and real_word_count == 0:
+                        # Zero real words = pure hallucination, skip
+                        del audio_array, frames
+                        gc.collect()
+                        continue
+
                     ratio = difflib.SequenceMatcher(None, self.last_text, text).ratio()
-                    if ratio < 0.6:
+                    if ratio < 0.5:
                         self.output_queue.put(text)
                         self.last_text = text
 

@@ -1,4 +1,4 @@
-# Second Brain, Live
+# JARVIS: Just A Rather Very Intelligent System
 
 ### "It sees everything. Remembers nothing. Makes you superhuman."
 

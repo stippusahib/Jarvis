@@ -7,3 +7,5 @@ numpy
 pystray
 pywin32
 torch
+pypdf
+python-docx
