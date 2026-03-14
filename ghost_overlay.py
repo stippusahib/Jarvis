@@ -67,7 +67,7 @@ class HistoryPanel:
         """Add a new suggestion to the top of the history list with feedback buttons."""
         # Create item wrapper
         item_frame = tk.Frame(self.list_frame, bg='#1A1F2B', padx=10, pady=8)
-        item_frame.pack(fill='x', pady=(0, 8), before=self.list_frame.winfo_children()[0] if self.list_frame.winfo_children() else None)
+        item_frame.pack(fill='x', pady=(0, 8))
         
         text_frame = tk.Frame(item_frame, bg='#1A1F2B')
         text_frame.pack(side='left', fill='x', expand=True)
@@ -168,6 +168,17 @@ class PopupWindow:
         self._dismissed = False
         
         self.window.overrideredirect(True)
+        
+        # Window affinity — invisible to screen sharing (Windows 11)
+        try:
+            import ctypes
+            # WDA_EXCLUDEFROMCAPTURE = 0x00000011
+            # This makes window invisible to all screen capture tools
+            hwnd = self.window.winfo_id()
+            ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, 0x00000011)  # type: ignore
+        except Exception:
+            pass  # Silently continue if not supported
+        
         self.window.attributes('-topmost', True)
         self.window.attributes('-alpha', 0.92)  # Glass transparency
         self.window.configure(bg='#0D1117')
@@ -263,7 +274,75 @@ class PopupWindow:
             for w in (self.window, self.outer, self.inner, self.header_frame, self.label_glow, self.label_header, self.label_text):
                 w.bind("<Button-1>", lambda e: self.on_click())
                 w.config(cursor="hand2")
-            
+
+        # Detect if this is a code context response (contains ISSUE: and FIX:)
+        self.is_code_response = "ISSUE:" in text and "FIX:" in text
+        self.copy_btn = None
+
+        if self.is_code_response:
+            # Parse ISSUE and FIX parts
+            issue_text = ""
+            fix_text = ""
+            try:
+                if "ISSUE:" in text:
+                    issue_part = text.split("ISSUE:")[1]
+                    if "FIX:" in issue_part:
+                        issue_text = issue_part.split("FIX:")[0].strip()
+                        fix_text = issue_part.split("FIX:")[1].strip()
+                    else:
+                        issue_text = issue_part.strip()
+                else:
+                    fix_text = text
+            except Exception:
+                fix_text = text
+
+            # Update main label to show issue only
+            if issue_text:
+                self.label_text.config(
+                    text=f"⚠️ {issue_text}",
+                    fg='#FF6B6B',  # red for issue
+                    font=("Consolas", 10)
+                )
+
+            # Code fix frame
+            if fix_text:
+                fix_frame = tk.Frame(self.inner, bg='#161B22', padx=8, pady=6)
+                fix_frame.pack(fill='x', pady=(6, 0))
+
+                # Fix label
+                fix_label = tk.Label(
+                    fix_frame,
+                    text=fix_text,
+                    font=("Consolas", 10),
+                    fg='#4DFFB4',
+                    bg='#161B22',
+                    wraplength=300,
+                    justify='left',
+                    anchor='w'
+                )
+                fix_label.pack(fill='x', side='left', expand=True)
+
+                # Copy button
+                self.copy_btn = tk.Button(
+                    fix_frame,
+                    text="⎘",
+                    font=("Consolas", 11, "bold"),
+                    fg='#4DFFB4',
+                    bg='#0D1117',
+                    activebackground='#1C2128',
+                    activeforeground='#FFFFFF',
+                    relief='flat',
+                    cursor='hand2',
+                    bd=0,
+                    padx=6,
+                    command=lambda: self._copy_to_clipboard(fix_text)
+                )
+                self.copy_btn.pack(side='right', padx=(4, 0))
+
+                # Bind click events to fix frame too
+                for w in (fix_frame, fix_label):
+                    w.bind("<Button-1>", lambda e: self.on_click())
+
         # Initial hidden setup to calculate height
         sw = self.window.winfo_screenwidth()
         sh = self.window.winfo_screenheight()
@@ -284,26 +363,20 @@ class PopupWindow:
         self._shift_after_id: str | None = None
         self._hold_after_id: str | None = None
 
-    def _calculate_hold_ms(self, text: str) -> int:
-        """Calculate display time based on message length."""
-        word_count = len(text.split())
-        if word_count <= 8:
-            return 3000   # Short — 3 seconds
-        elif word_count <= 14:
-            return 5000   # Medium — 5 seconds
-        elif word_count <= 20:
-            return 7000   # Long — 7 seconds
-        else:
-            return 9000   # Very long — 9 seconds
+    def _copy_to_clipboard(self, text: str):
+        """Copy text to clipboard and show brief confirmation."""
+        try:
+            self.window.clipboard_clear()
+            self.window.clipboard_append(text)
+            self.window.update()
+            # Flash copy button green briefly
+            if self.copy_btn:
+                self.copy_btn.config(text="✓", fg='#00FF88')
+                self.window.after(1000, lambda: self.copy_btn.config(text="⎘", fg='#4DFFB4') if self.copy_btn else None)
+            print(f"📋 Copied to clipboard: {text[:50]}...")
+        except Exception as e:
+            print(f"⚠️  Clipboard error: {e}")
 
-    def setup_geometry(self, initial_target_y):
-        self.target_y = float(initial_target_y)
-        self.current_y = float(initial_target_y)
-        self.window.geometry(f"{int(self.width)}x{int(self.height)}+{int(self.current_x)}+{int(self.current_y)}")
-
-    def start_slide_in(self):
-        self._slide_in_step(0)
-    
     def _calculate_hold_ms(self, text: str) -> int:
         """Adaptive display time based on word count."""
         word_count = len(text.split())
@@ -314,7 +387,15 @@ class PopupWindow:
         elif word_count <= 20:
             return 7000
         else:
-            return 9000 
+            return 9000
+
+    def setup_geometry(self, initial_target_y):
+        self.target_y = float(initial_target_y)
+        self.current_y = float(initial_target_y)
+        self.window.geometry(f"{int(self.width)}x{int(self.height)}+{int(self.current_x)}+{int(self.current_y)}")
+
+    def start_slide_in(self):
+        self._slide_in_step(0)
         
     def _slide_in_step(self, step):
         if self._dismissed: return
@@ -328,7 +409,7 @@ class PopupWindow:
             self.window.geometry(f"{int(self.width)}x{int(self.height)}+{int(self.current_x)}+{_y}")
             def slide_callback(step_val=step + 1):
                 self._slide_in_step(step_val)
-            self._slide_after_id = self.window.after(12, slide_callback) # type: ignore
+            self._slide_after_id = self.window.after(12, slide_callback)  # type: ignore
         else:
             self.current_x = float(self.normal_x)
             _y = int(self.current_y) if self.current_y is not None else 0
@@ -355,7 +436,7 @@ class PopupWindow:
             self.window.geometry(f"{int(self.width)}x{int(self.height)}+{int(self.current_x)}+{int(self.current_y)}")
             def shift_callback(step_val=step + 1, sy=start_y, ey=end_y):
                 self._shift_step(step_val, sy, ey)
-            self._shift_after_id = self.window.after(16, shift_callback) # type: ignore
+            self._shift_after_id = self.window.after(16, shift_callback)  # type: ignore
         else:
             self.current_y = float(end_y)
             self.window.geometry(f"{int(self.width)}x{int(self.height)}+{int(self.current_x)}+{int(self.current_y)}")
@@ -408,8 +489,12 @@ class PopupWindow:
         if hasattr(self, 'is_multichoice') and self.is_multichoice:
             return
             
-        if self.parent_overlay and hasattr(self.parent_overlay, 'history_panel'):
-            self.parent_overlay.history_panel.add_item(self.text)
+        try:
+            if self.parent_overlay and hasattr(self.parent_overlay, 'history_panel'):
+                self.parent_overlay.history_panel.add_item(self.text)
+        except Exception:
+            pass
+        
         self.dismiss()
 
     def on_regenerate(self):
@@ -480,7 +565,7 @@ class PopupWindow:
             self.window.geometry(f"{int(self.width)}x{int(self.height)}+{int(self.current_x)}+{_y}")
             def slide_out_callback(step_val=step + 1, sx=start_x, ex=end_x):
                 self._slide_out_step(step_val, sx, ex)
-            self.window.after(13, slide_out_callback) # type: ignore
+            self.window.after(13, slide_out_callback)  # type: ignore
         else:
             self.window.withdraw()
             self.window.destroy()
@@ -492,6 +577,15 @@ class GhostOverlay:
         self.root = root
         self.root.ghost_overlay_ref = self  # Give children access to overlay manager
         self.root.withdraw()
+        
+        # Apply window affinity to root too
+        try:
+            import ctypes
+            hwnd = self.root.winfo_id()
+            ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, 0x00000011)  # type: ignore
+        except Exception:
+            pass
+        
         self._popup_stack = []
         self._popup_queue = queue.Queue()
         self.MAX_STACK = 3
@@ -506,7 +600,7 @@ class GhostOverlay:
         try:
             return self.root.winfo_id()
         except (ImportError, AttributeError):
-            pass # Windows-only fallbacke
+            pass  # Windows-only fallback
 
     def show_popup(self, text, audio_text=None):
         """Thread-safe method to queue a popup message."""

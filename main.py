@@ -11,6 +11,12 @@ import tkinter as tk
 import ast
 import gc
 
+try:
+    import keyboard
+    HAS_KEYBOARD = True
+except ImportError:
+    HAS_KEYBOARD = False
+
 from audio_listener import AudioListener
 from screen_reader import ScreenReader
 from context_engine import get_suggestion, prewarm_ollama
@@ -101,6 +107,9 @@ def run_live(overlay, screen):
     audio.start()
     screen.start()
 
+    # Reduce screen capture interval for hotkey responsiveness
+    screen.interval = 4  # capture every 4 seconds instead of 8
+
     print("🧠 Live mode active — listening and watching...")
     print("   Press Ctrl+C to stop.\n")
 
@@ -125,6 +134,40 @@ def run_live(overlay, screen):
         screen.stop()
         sys.exit(0)
 
+
+def setup_hotkey(overlay, screen):
+    """Setup Ctrl+Shift+J for instant screen scan."""
+    if not HAS_KEYBOARD:
+        print("⚠️  keyboard library not found — hotkey disabled. Run: pip install keyboard")
+        return
+
+    def on_hotkey():
+        try:
+            print("🔑 Ctrl+Shift+J — instant screen scan triggered")
+            screen_b64 = screen.get_latest()
+            if not screen_b64:
+                print("🔑 No screen capture yet — waiting for first capture...")
+                return
+            suggestion = get_suggestion(
+                "user triggered instant screen scan",
+                screen_b64,
+                force_vision=True
+            )
+            if suggestion and suggestion != "SILENT":
+                print(f"🔑 Hotkey suggestion: {suggestion}")
+                overlay.show_popup(suggestion)
+            else:
+                print("🔑 Nothing specific found on screen")
+        except Exception as e:
+            print(f"⚠️  Hotkey error: {e}")
+
+    try:
+        keyboard.add_hotkey('ctrl+shift+j', on_hotkey, suppress=False)
+        print("🔑 Hotkey active: Ctrl+Shift+J — instant screen scan")
+    except Exception as e:
+        print(f"⚠️  Hotkey registration failed: {e}")
+
+
 def main():
     demo_mode = "--demo" in sys.argv
 
@@ -144,6 +187,9 @@ def main():
 
     # Tray icon — safe, never crashes main if it fails
     tray = create_tray_icon(lambda: (root.quit(), sys.exit(0)))
+
+    # Setup hotkey
+    setup_hotkey(overlay, screen)
 
     if demo_mode:
         print("🧠 JARVIS, Live — DEMO MODE")

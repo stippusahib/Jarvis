@@ -128,7 +128,7 @@ class AudioListener:
                 text = " ".join(valid_segments).strip()
 
                 # Debounce check
-                if text and len(text) > 15:
+                if text and len(text) > 18:
                     # Hallucination filter — reject transcriptions with fake/nonsense words
                     common_real_words = set([
                         "the", "and", "for", "you", "that", "this", "with", "have",

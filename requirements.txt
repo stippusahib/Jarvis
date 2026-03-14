@@ -9,3 +9,4 @@ pywin32
 torch
 pypdf
 python-docx
+keyboard
