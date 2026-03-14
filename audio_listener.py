@@ -21,6 +21,8 @@ from faster_whisper import WhisperModel
 class AudioListener:
     """Captures mic audio, transcribes with Whisper, and outputs text to a queue."""
 
+    WAKE_WORDS = ["jarvis", "hey jarvis", "ok jarvis", "yo jarvis"]
+
     RATE = 16000
     CHUNK = 1024
     CHANNELS = 1
@@ -136,7 +138,8 @@ class AudioListener:
                         "slow", "fast", "error", "function", "meeting", "project", "did",
                         "nested", "running", "looking", "working", "trying", "need", "know",
                         "think", "said", "your", "our", "can", "will", "should", "would",
-                        "alfie", "tippu", "hey", "did", "read", "send", "share", "open"
+                        "alfie", "tippu", "hey", "did", "read", "send", "share", "open",
+                        "jarvis", "fix", "help", "what", "why", "how", "time", "check"
                     ])
                     text_words = set(text.lower().split())
                     real_word_count = len(text_words.intersection(common_real_words))
@@ -147,7 +150,25 @@ class AudioListener:
                         gc.collect()
                         continue
 
-                    # Auto-reset debounce after 15 seconds — new topic always passes
+                    # Wake word detection — only process if JARVIS is addressed
+                    text_lower = text.lower()
+                    has_wake_word = any(wake in text_lower for wake in self.WAKE_WORDS)
+
+                    if not has_wake_word:
+                        # No wake word — silently discard
+                        del audio_array, frames
+                        gc.collect()
+                        continue
+
+                    # Strip wake word from text before sending to LLM
+                    cleaned = text_lower
+                    for wake in sorted(self.WAKE_WORDS, key=len, reverse=True):
+                        cleaned = cleaned.replace(wake, "").strip()
+                    # Use cleaned text if meaningful, else original
+                    if len(cleaned) > 3:
+                        text = cleaned
+
+                    # Auto-reset debounce after 12 seconds — new topic always passes
                     current_time = time.time()
                     if current_time - self.last_text_time > 12:
                         self.last_text = ""
