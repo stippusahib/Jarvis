@@ -27,7 +27,7 @@ def read_file_context(filepath: pathlib.Path, max_chars: int = 1500) -> str:
                     if chars_read >= max_chars:
                         break
                 result = "".join(text_parts)
-                return result[:int(max_chars)] # type: ignore
+                return result[:max_chars]
             except Exception:
                 return f"File found: {filepath.name} (couldn't read content)"
 
@@ -40,7 +40,7 @@ def read_file_context(filepath: pathlib.Path, max_chars: int = 1500) -> str:
                     if para.text:
                         text_parts.append(para.text)
                 result = "\n".join(text_parts)
-                return result[:int(max_chars)] # type: ignore
+                return result[:max_chars]
             except Exception:
                 return f"File found: {filepath.name} (couldn't read content)"
 
@@ -55,4 +55,3 @@ def read_file_context(filepath: pathlib.Path, max_chars: int = 1500) -> str:
 
     finally:
         gc.collect()
-    return ""

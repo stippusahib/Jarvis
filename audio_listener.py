@@ -7,8 +7,7 @@ import queue
 import time
 import difflib
 import numpy as np
-import scipy.io.wavfile as wavfile
-import io
+
 
 try:
     import noisereduce as nr
@@ -150,7 +149,7 @@ class AudioListener:
 
                     # Auto-reset debounce after 15 seconds — new topic always passes
                     current_time = time.time()
-                    if current_time - self.last_text_time > 15:
+                    if current_time - self.last_text_time > 12:
                         self.last_text = ""
 
                     ratio = difflib.SequenceMatcher(None, self.last_text, text).ratio()
