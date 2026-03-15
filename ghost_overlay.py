@@ -609,8 +609,10 @@ class ChatPanel:
         except Exception:
             pass
         
+        
         self.window.overrideredirect(True)
         self.window.attributes('-topmost', True)
+        self.window.lift()  # ensure above all other windows
         self.window.attributes('-alpha', 0.95)
         self.window.configure(bg='#0A0F1A')
         
@@ -621,15 +623,31 @@ class ChatPanel:
         inner = tk.Frame(outer, bg='#0A0F1A', padx=0, pady=0)
         inner.pack(fill='both', expand=True)
         
-        # Header
+        # Header frame with close button
+        header_frame = tk.Frame(inner, bg='#0A0F1A')
+        header_frame.pack(fill='x')
+        
         self.header = tk.Label(
-            inner,
+            header_frame,
             text=f"💬 CHAT  ({self.MAX_MESSAGES}/5 messages left)",
             font=("Consolas", 9, "bold"),
             fg='#4DFFB4', bg='#0A0F1A',
             anchor='w', padx=12, pady=6
         )
-        self.header.pack(fill='x')
+        self.header.pack(side='left', fill='x', expand=True)
+        
+        close_btn = tk.Label(
+            header_frame,
+            text="✕",
+            font=("Consolas", 10, "bold"),
+            fg='#888888', bg='#0A0F1A',
+            cursor='hand2',
+            padx=10, pady=6
+        )
+        close_btn.pack(side='right')
+        close_btn.bind("<Button-1>", lambda e: self.close())
+        close_btn.bind("<Enter>", lambda e: close_btn.config(fg='#FF6B6B'))
+        close_btn.bind("<Leave>", lambda e: close_btn.config(fg='#888888'))
         
         # Separator
         tk.Frame(inner, bg='#2A3A4A', height=1).pack(fill='x')
@@ -726,6 +744,8 @@ class ChatPanel:
         
         self.window.geometry(f"{self.width}x{self.height}+{int(x)}+{int(y)}")
         self.window.deiconify()
+        self.window.lift()
+        self.window.focus_set()
 
     def _clear_placeholder(self, event):
         if self.input_var.get() == "Ask JARVIS...":
@@ -987,6 +1007,25 @@ class GhostOverlay:
                 popup.animate_to_y(current_y)
                 
             current_y -= self.STACK_GAP
+
+        # Reposition chat panel if open — keep it below the bottom popup
+        if self._active_chat and not self._active_chat._closed:
+            if self._popup_stack:
+                bottom_popup = self._popup_stack[-1]
+                if bottom_popup.current_y is not None and bottom_popup.height:
+                    new_chat_y = int(bottom_popup.current_y) + int(bottom_popup.height) + 4
+                    sw = self.root.winfo_screenwidth()
+                    chat_x = sw - self._active_chat.width - 24
+                    sh = self.root.winfo_screenheight()
+                    # Keep on screen
+                    if new_chat_y + self._active_chat.height > sh - 20:
+                        new_chat_y = int(bottom_popup.current_y) - self._active_chat.height - 4
+                    try:
+                        self._active_chat.window.geometry(
+                            f"{self._active_chat.width}x{self._active_chat.height}+{chat_x}+{new_chat_y}"
+                        )
+                    except Exception:
+                        pass
             
     def _on_popup_dismiss(self, popup):
         """Fires when a popup is dismissed, allowing remaining popups to shift down."""
