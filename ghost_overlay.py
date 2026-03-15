@@ -59,7 +59,7 @@ class HistoryPanel:
         sw = self.window.winfo_screenwidth()
         self.width = 340
         self.start_x = sw + 20
-        self.normal_x = sw - self.width - 24
+        self.normal_x = sw - self.width - 16
         self.window.geometry(f"{self.width}x400+{self.start_x}+40")
         self.window.withdraw()
 
@@ -369,14 +369,15 @@ class PopupWindow:
         self.window.geometry(f"380x80+{sw+100}+{sh+100}")
         self.window.update_idletasks()
         
-        self.width = max(self.window.winfo_reqwidth(), 440)
+        self.width = 440  # fixed width — no dynamic calculation
         self.height = max(self.window.winfo_reqheight(), 80)
         
-        self.target_y: float | None = None
         self.current_y: float | None = None
+        self.current_x: float | None = None
         
-        self.normal_x: float = sw - self.width - 24
-        self.start_x: float = sw + 20
+        # Horizontal position (fixed)
+        self.normal_x: float = float(sw - 440 - 16)  # hardcoded 440 width
+        self.start_x: float = float(sw + 20)
         self.current_x: float = self.start_x
         
         self._slide_after_id: str | None = None
@@ -414,7 +415,7 @@ class PopupWindow:
     def _start_countdown_bar(self, total_ms: int):
         """Animate shrinking countdown bar over total_ms duration."""
         steps = 120
-        interval = max(total_ms // steps, 16)  # minimum 16ms per frame (~60fps)
+        interval = max(total_ms // steps, 10)  # minimum 16ms per frame (~60fps)
         
         def _step(remaining):
             if self._dismissed: return
