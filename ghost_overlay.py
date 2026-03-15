@@ -483,18 +483,34 @@ class PopupWindow:
         self._hold_after_id = self.window.after(max(hold_ms, 4000), self.dismiss)
 
     def on_click(self):
-        """When clicked, dismiss the popup but save to history panel."""
+        """When clicked — save to history AND open chat panel."""
         if self._dismissed: return
-        # Ignore clicks if we're in multi-choice mode (must pick a button)
         if hasattr(self, 'is_multichoice') and self.is_multichoice:
             return
-            
+
+        # Save to history
         try:
             if self.parent_overlay and hasattr(self.parent_overlay, 'history_panel'):
                 self.parent_overlay.history_panel.add_item(self.text)
         except Exception:
             pass
-        
+
+        # Open chat panel if not already open
+        try:
+            if self.parent_overlay and not self.parent_overlay.chat_panel_open:
+                # Calculate position below this popup
+                popup_x = int(self.current_x) if self.current_x else 0
+                popup_bottom_y = int(self.current_y + self.height) if self.current_y else 0
+                
+                self.parent_overlay.open_chat(
+                    self.text,
+                    popup_x,
+                    popup_bottom_y
+                )
+                return  # Don't dismiss — keep popup visible during chat
+        except Exception:
+            pass
+
         self.dismiss()
 
     def on_regenerate(self):
@@ -571,6 +587,305 @@ class PopupWindow:
             self.window.destroy()
 
 
+class ChatPanel:
+    """Inline chat panel that appears below a popup when clicked."""
+    
+    MAX_MESSAGES = 5  # per session limit
+    INACTIVITY_TIMEOUT = 30000  # 30 seconds in ms
+    
+    def __init__(self, parent_root, initial_suggestion, on_close):
+        self.window = tk.Toplevel(parent_root)
+        self.on_close = on_close
+        self.message_count = 0
+        self.chat_history = []  # RAM only — never stored
+        self._inactivity_timer = None
+        self._closed = False
+        
+        # Window affinity — invisible to screen share
+        try:
+            import ctypes
+            hwnd = self.window.winfo_id()
+            ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, 0x00000011)
+        except Exception:
+            pass
+        
+        self.window.overrideredirect(True)
+        self.window.attributes('-topmost', True)
+        self.window.attributes('-alpha', 0.95)
+        self.window.configure(bg='#0A0F1A')
+        
+        # Outer border
+        outer = tk.Frame(self.window, bg='#2A3A4A', padx=1, pady=1)
+        outer.pack(fill='both', expand=True)
+        
+        inner = tk.Frame(outer, bg='#0A0F1A', padx=0, pady=0)
+        inner.pack(fill='both', expand=True)
+        
+        # Header
+        self.header = tk.Label(
+            inner,
+            text=f"💬 CHAT  ({self.MAX_MESSAGES}/5 messages left)",
+            font=("Consolas", 9, "bold"),
+            fg='#4DFFB4', bg='#0A0F1A',
+            anchor='w', padx=12, pady=6
+        )
+        self.header.pack(fill='x')
+        
+        # Separator
+        tk.Frame(inner, bg='#2A3A4A', height=1).pack(fill='x')
+        
+        # Chat history — scrollable text area
+        self.chat_frame = tk.Frame(inner, bg='#0A0F1A')
+        self.chat_frame.pack(fill='both', expand=True, padx=8, pady=6)
+        
+        self.chat_text = tk.Text(
+            self.chat_frame,
+            font=("Consolas", 10),
+            bg='#0A0F1A',
+            fg='#FFFFFF',
+            relief='flat',
+            bd=0,
+            wrap='word',
+            height=6,
+            width=40,
+            state='disabled',
+            cursor='arrow'
+        )
+        self.chat_text.pack(fill='both', expand=True)
+        
+        # Configure text tags for colors
+        self.chat_text.tag_configure('jarvis', foreground='#4DFFB4', font=("Consolas", 10, "bold"))
+        self.chat_text.tag_configure('user', foreground='#FFFFFF', font=("Consolas", 10))
+        self.chat_text.tag_configure('system', foreground='#888888', font=("Consolas", 9, "italic"))
+        
+        # Separator
+        tk.Frame(inner, bg='#2A3A4A', height=1).pack(fill='x')
+        
+        # Input row
+        input_frame = tk.Frame(inner, bg='#0A0F1A', padx=8, pady=6)
+        input_frame.pack(fill='x')
+        
+        self.input_var = tk.StringVar()
+        self.input_field = tk.Entry(
+            input_frame,
+            textvariable=self.input_var,
+            font=("Consolas", 10),
+            bg='#161B22',
+            fg='#FFFFFF',
+            insertbackground='#4DFFB4',
+            relief='flat',
+            bd=4
+        )
+        self.input_field.pack(side='left', fill='x', expand=True, ipady=4)
+        self.input_field.insert(0, "Ask JARVIS...")
+        self.input_field.bind("<FocusIn>", self._clear_placeholder)
+        self.input_field.bind("<FocusOut>", self._restore_placeholder)
+        self.input_field.bind("<Return>", lambda e: self._send_message())
+        
+        self.send_btn = tk.Button(
+            input_frame,
+            text="▶",
+            font=("Consolas", 11, "bold"),
+            fg='#4DFFB4',
+            bg='#0D1117',
+            activebackground='#1C2128',
+            activeforeground='#FFFFFF',
+            relief='flat',
+            bd=0,
+            padx=8,
+            cursor='hand2',
+            command=self._send_message
+        )
+        self.send_btn.pack(side='right', padx=(4, 0))
+        
+        # Add initial suggestion as first JARVIS message
+        self._add_message("JARVIS", initial_suggestion)
+        
+        # Window geometry — will be set by position_below()
+        self.width = 380
+        self.height = 220
+        self.window.geometry(f"{self.width}x{self.height}+9999+9999")
+        self.window.update_idletasks()
+        self.height = max(self.window.winfo_reqheight(), 220)
+        
+        # Start inactivity timer
+        self._reset_inactivity_timer()
+        
+        # Focus input
+        self.window.after(100, lambda: self.input_field.focus_set())
+
+    def position_below(self, popup_x, popup_bottom_y):
+        """Position chat panel directly below the popup."""
+        x = popup_x
+        y = popup_bottom_y + 4  # 4px gap
+        
+        # Make sure it doesn't go off screen bottom
+        sh = self.window.winfo_screenheight()
+        if y + self.height > sh - 20:
+            y = popup_bottom_y - self.height - 4  # above popup instead
+        
+        self.window.geometry(f"{self.width}x{self.height}+{int(x)}+{int(y)}")
+        self.window.deiconify()
+
+    def _clear_placeholder(self, event):
+        if self.input_var.get() == "Ask JARVIS...":
+            self.input_field.delete(0, 'end')
+            self.input_field.config(fg='#FFFFFF')
+
+    def _restore_placeholder(self, event):
+        if not self.input_var.get():
+            self.input_field.insert(0, "Ask JARVIS...")
+            self.input_field.config(fg='#555555')
+
+    def _add_message(self, sender: str, message: str):
+        """Add a message to the chat history display."""
+        self.chat_text.config(state='normal')
+        
+        if sender == "JARVIS":
+            self.chat_text.insert('end', f"⚡ JARVIS: ", 'jarvis')
+            self.chat_text.insert('end', f"{message}\n\n", 'jarvis')
+        elif sender == "You":
+            self.chat_text.insert('end', f"You: ", 'user')
+            self.chat_text.insert('end', f"{message}\n\n", 'user')
+        else:
+            self.chat_text.insert('end', f"{message}\n", 'system')
+        
+        self.chat_text.config(state='disabled')
+        self.chat_text.see('end')  # auto-scroll to bottom
+        
+        # Store in RAM history
+        self.chat_history.append({"role": sender, "content": message})
+
+    def _send_message(self):
+        """Handle user sending a message."""
+        if self._closed:
+            return
+            
+        user_text = self.input_var.get().strip()
+        if not user_text or user_text == "Ask JARVIS...":
+            return
+        
+        # Check message limit
+        if self.message_count >= self.MAX_MESSAGES:
+            self._add_message("system", "⚠️ Chat limit reached (5/5). Start a new session.")
+            return
+        
+        self.message_count += 1
+        remaining = self.MAX_MESSAGES - self.message_count
+        
+        # Update header
+        color = '#FF6B6B' if remaining <= 1 else '#4DFFB4'
+        self.header.config(
+            text=f"💬 CHAT  ({remaining}/5 messages left)",
+            fg=color
+        )
+        
+        # Clear input
+        self.input_var.set("")
+        self.input_field.config(fg='#FFFFFF')
+        
+        # Add user message
+        self._add_message("You", user_text)
+        
+        # Disable input while processing
+        self.input_field.config(state='disabled')
+        self.send_btn.config(state='disabled', text="...")
+        
+        # Reset inactivity timer
+        self._reset_inactivity_timer()
+        
+        # Get response in background thread
+        import threading
+        threading.Thread(
+            target=self._fetch_response,
+            args=(user_text,),
+            daemon=True
+        ).start()
+
+    def _fetch_response(self, user_text: str):
+        """Fetch JARVIS response in background thread."""
+        try:
+            from context_engine import get_suggestion
+            
+            # Build context from chat history for better responses
+            context_text = user_text
+            if len(self.chat_history) > 1:
+                # Include last 2 exchanges for context
+                recent = self.chat_history[-4:] if len(self.chat_history) >= 4 else self.chat_history
+                context_parts = []
+                for msg in recent[:-1]:  # exclude current message
+                    context_parts.append(f"{msg['role']}: {msg['content']}")
+                context_text = "\n".join(context_parts) + f"\nUser follow-up: {user_text}"
+            
+            response = get_suggestion(context_text, None, regenerate=False)
+            
+            if response == "SILENT":
+                response = "I don't have anything specific to add on that."
+            
+            # Update UI in main thread
+            self.window.after(0, lambda: self._display_response(response))
+            
+        except Exception as e:
+            error_msg = "Something went wrong — try again."
+            self.window.after(0, lambda: self._display_response(error_msg))
+
+    def _display_response(self, response: str):
+        """Display JARVIS response and re-enable input."""
+        if self._closed:
+            return
+            
+        self._add_message("JARVIS", response)
+        
+        # Re-enable input if limit not reached
+        if self.message_count < self.MAX_MESSAGES:
+            self.input_field.config(state='normal')
+            self.send_btn.config(state='normal', text="▶")
+            self.input_field.focus_set()
+        else:
+            self.input_field.config(state='disabled')
+            self.send_btn.config(state='disabled', text="✓")
+            self._add_message("system", "Chat limit reached. Session ended.")
+
+    def _reset_inactivity_timer(self):
+        """Reset the 30-second inactivity auto-close timer."""
+        if self._inactivity_timer:
+            try:
+                self.window.after_cancel(self._inactivity_timer)
+            except Exception:
+                pass
+        self._inactivity_timer = self.window.after(
+            self.INACTIVITY_TIMEOUT,
+            self.close
+        )
+
+    def close(self):
+        """Close and destroy the chat panel."""
+        if self._closed:
+            return
+        self._closed = True
+        
+        # Wipe chat history from RAM
+        self.chat_history.clear()
+        
+        if self._inactivity_timer:
+            try:
+                self.window.after_cancel(self._inactivity_timer)
+            except Exception:
+                pass
+        
+        try:
+            self.window.destroy()
+        except Exception:
+            pass
+        
+        # Notify parent
+        if self.on_close:
+            try:
+                self.on_close()
+            except Exception:
+                pass
+
+
 class GhostOverlay:
     """Manages the popup stack and UI orchestration as invisible root."""
     def __init__(self, root):
@@ -592,6 +907,8 @@ class GhostOverlay:
         self.STACK_GAP = 12
         
         self.history_panel = HistoryPanel(root)
+        self.chat_panel_open = False
+        self._active_chat = None
         
         self._poll_queue()
         
@@ -601,6 +918,30 @@ class GhostOverlay:
             return self.root.winfo_id()
         except (ImportError, AttributeError):
             pass  # Windows-only fallback
+
+    def open_chat(self, initial_suggestion: str, popup_x: int, popup_bottom_y: int):
+        """Open inline chat panel below the popup."""
+        if self.chat_panel_open:
+            return  # Only one chat at a time
+        
+        self.chat_panel_open = True
+        
+        def on_chat_close():
+            self.chat_panel_open = False
+            self._active_chat = None
+        
+        chat = ChatPanel(
+            self.root,
+            initial_suggestion,
+            on_chat_close
+        )
+        chat.position_below(popup_x, popup_bottom_y)
+        self._active_chat = chat
+
+    def close_chat(self):
+        """Close active chat if open."""
+        if self._active_chat:
+            self._active_chat.close()
 
     def show_popup(self, text, audio_text=None):
         """Thread-safe method to queue a popup message."""
