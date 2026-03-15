@@ -195,19 +195,29 @@ class PopupWindow:
         self.header_frame.pack(fill='x', pady=(0, 6))
         self.header_frame.pack_propagate(False)
         
+        from datetime import datetime
+        timestamp = datetime.now().strftime('%I:%M %p')
+        
         self.label_glow = tk.Label(
             self.header_frame, text="⚡ JARVIS",
             font=("Consolas", 9, "bold"),
             fg='#1F6648', bg='#0D1117', anchor='w'
         )
-        self.label_glow.place(x=0, y=1, relwidth=1.0, relheight=1.0)
+        self.label_glow.place(x=0, y=1, relwidth=0.7, relheight=1.0)
         
         self.label_header = tk.Label(
-            self.header_frame, text="⚡ JARVIS",
+            self.header_frame, text=f"⚡ JARVIS",
             font=("Consolas", 9, "bold"),
             fg='#4DFFB4', bg='#0D1117', anchor='w'
         )
-        self.label_header.place(x=0, y=0, relwidth=1.0, relheight=1.0)
+        self.label_header.place(x=0, y=0, relwidth=0.7, relheight=1.0)
+        
+        self.label_timestamp = tk.Label(
+            self.header_frame, text=timestamp,
+            font=("Consolas", 8),
+            fg='#3A3A3A', bg='#0D1117', anchor='e'
+        )
+        self.label_timestamp.place(x=0, y=0, relwidth=1.0, relheight=1.0)
         
         # Regenerate Button (only if audio_text is available)
         if self.audio_text:
@@ -229,7 +239,7 @@ class PopupWindow:
                 self.inner, text="Multiple options found. Choose one:",
                 font=("Segoe UI", 10, "italic"),
                 fg='#A0A0A0', bg='#0D1117',
-                wraplength=340, justify='left', anchor='w'
+                wraplength=400, justify='left', anchor='w'
             )
             self.label_text.pack(fill='x', pady=(0, 4))
             
@@ -239,8 +249,8 @@ class PopupWindow:
                 
                 btn_lbl = tk.Label(
                     btn_frame, text=opt,
-                    font=("Segoe UI", 11), fg='#FFFFFF', bg='#1C222F',
-                    wraplength=320, justify='left', anchor='w', cursor="hand2",
+                    font=("Segoe UI", 13), fg='#FFFFFF', bg='#1C222F',
+                    wraplength=400, justify='left', anchor='w', cursor="hand2",
                     padx=6, pady=4
                 )
                 btn_lbl.pack(fill='x')
@@ -264,11 +274,18 @@ class PopupWindow:
         else:
             self.label_text = tk.Label(
                 self.inner, text=text,
-                font=("Segoe UI", 11),
+                font=("Segoe UI", 13),
                 fg='#FFFFFF', bg='#0D1117',
-                wraplength=340, justify='left', anchor='w'
+                wraplength=400, justify='left', anchor='w'
             )
             self.label_text.pack(fill='x')
+            
+            # Countdown progress bar
+            self._bar_frame = tk.Frame(self.inner, bg='#1A1A2A', height=2)
+            self._bar_frame.pack(fill='x', pady=(8, 0))
+            self._bar_fill = tk.Frame(self._bar_frame, bg='#4DFFB4', height=2)
+            self._bar_fill.place(x=0, y=0, relwidth=1.0, height=2)
+            self._bar_after_id = None
             
             # Bind click to dismiss/save everywhere
             for w in (self.window, self.outer, self.inner, self.header_frame, self.label_glow, self.label_header, self.label_text):
@@ -349,7 +366,7 @@ class PopupWindow:
         self.window.geometry(f"380x80+{sw+100}+{sh+100}")
         self.window.update_idletasks()
         
-        self.width = max(self.window.winfo_reqwidth(), 380)
+        self.width = max(self.window.winfo_reqwidth(), 440)
         self.height = max(self.window.winfo_reqheight(), 80)
         
         self.target_y: float | None = None
@@ -376,6 +393,53 @@ class PopupWindow:
             print(f"📋 Copied to clipboard: {text[:50]}...")
         except Exception as e:
             print(f"⚠️  Clipboard error: {e}")
+
+    def _pulse_border(self, step=0):
+        """Pulse border from dark to mint green and back on appear."""
+        if self._dismissed: return
+        pulse_colors = [
+            '#3A3A3A', '#4A5A4A', '#4DFFB4', '#4DFFB4',
+            '#4A5A4A', '#3A3A3A'
+        ]
+        if step < len(pulse_colors):
+            try:
+                self.outer.config(bg=pulse_colors[step])
+            except Exception:
+                pass
+            self.window.after(80, lambda: self._pulse_border(step + 1))
+
+    def _start_countdown_bar(self, total_ms: int):
+        """Animate shrinking countdown bar over total_ms duration."""
+        steps = 60
+        interval = total_ms // steps
+        
+        def _step(remaining):
+            if self._dismissed: return
+            try:
+                fraction = remaining / steps
+                self._bar_fill.place(x=0, y=0, relwidth=fraction, height=2)
+                # Color shift: green → yellow → red
+                if fraction > 0.5:
+                    color = '#4DFFB4'
+                elif fraction > 0.25:
+                    color = '#FFB347'
+                else:
+                    color = '#FF6B6B'
+                self._bar_fill.config(bg=color)
+                if remaining > 0:
+                    self._bar_after_id = self.window.after(interval, lambda: _step(remaining - 1))
+            except Exception:
+                pass
+        
+        _step(steps)
+
+    def _play_appear_sound(self):
+        """Play subtle Windows system sound on popup appear."""
+        try:
+            import winsound
+            winsound.MessageBeep(winsound.MB_OK)
+        except Exception:
+            pass
 
     def _calculate_hold_ms(self, text: str) -> int:
         """Adaptive display time based on word count."""
@@ -414,7 +478,14 @@ class PopupWindow:
             self.current_x = float(self.normal_x)
             _y = int(self.current_y) if self.current_y is not None else 0
             self.window.geometry(f"{int(self.width)}x{int(self.height)}+{int(self.current_x)}+{_y}")
+            
+            self._pulse_border()
+            import threading
+            threading.Thread(target=self._play_appear_sound, daemon=True).start()
+            
             hold_ms = self._calculate_hold_ms(self.text)
+            self._start_countdown_bar(hold_ms)
+            
             self._hold_after_id = self.window.after(hold_ms, self.dismiss)
 
     def animate_to_y(self, new_y):
@@ -455,9 +526,9 @@ class PopupWindow:
         # Show final choice
         self.label_text = tk.Label(
             self.inner, text=self.text,
-            font=("Segoe UI", 11),
+            font=("Segoe UI", 13),
             fg='#FFFFFF', bg='#0D1117',
-            wraplength=340, justify='left', anchor='w'
+            wraplength=400, justify='left', anchor='w'
         )
         self.label_text.pack(fill='x', pady=(6,0))
         
@@ -567,6 +638,12 @@ class PopupWindow:
             self.window.after_cancel(self._slide_after_id)
         if self._shift_after_id is not None:
             self.window.after_cancel(self._shift_after_id)
+            
+        if hasattr(self, '_bar_after_id') and self._bar_after_id:
+            try:
+                self.window.after_cancel(self._bar_after_id)
+            except Exception:
+                pass
             
         self.on_dismiss(self)
         self._slide_out_step(0, self.current_x, self.start_x)
