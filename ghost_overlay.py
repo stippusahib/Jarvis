@@ -198,26 +198,29 @@ class PopupWindow:
         from datetime import datetime
         timestamp = datetime.now().strftime('%I:%M %p')
         
+        # Glow layer (behind)
         self.label_glow = tk.Label(
-            self.header_frame, text="⚡ JARVIS",
+            self.header_frame, text="⚡  JARVIS",
             font=("Consolas", 9, "bold"),
             fg='#1F6648', bg='#0D1117', anchor='w'
         )
-        self.label_glow.place(x=0, y=1, relwidth=0.7, relheight=1.0)
+        self.label_glow.place(x=0, y=1, relwidth=0.75, relheight=1.0)
         
+        # Main header (front)
         self.label_header = tk.Label(
-            self.header_frame, text=f"⚡ JARVIS",
+            self.header_frame, text="⚡  JARVIS",
             font=("Consolas", 9, "bold"),
             fg='#4DFFB4', bg='#0D1117', anchor='w'
         )
-        self.label_header.place(x=0, y=0, relwidth=0.7, relheight=1.0)
+        self.label_header.place(x=0, y=0, relwidth=0.75, relheight=1.0)
         
+        # Timestamp top-right — separate from header labels
         self.label_timestamp = tk.Label(
             self.header_frame, text=timestamp,
             font=("Consolas", 8),
-            fg='#3A3A3A', bg='#0D1117', anchor='e'
+            fg='#3A3A3A', bg='#0D1117', anchor='e', padx=4
         )
-        self.label_timestamp.place(x=0, y=0, relwidth=1.0, relheight=1.0)
+        self.label_timestamp.place(relx=0.75, y=0, relwidth=0.25, relheight=1.0)
         
         # Regenerate Button (only if audio_text is available)
         if self.audio_text:
@@ -410,14 +413,14 @@ class PopupWindow:
 
     def _start_countdown_bar(self, total_ms: int):
         """Animate shrinking countdown bar over total_ms duration."""
-        steps = 60
-        interval = total_ms // steps
+        steps = 120
+        interval = max(total_ms // steps, 16)  # minimum 16ms per frame (~60fps)
         
         def _step(remaining):
             if self._dismissed: return
             try:
                 fraction = remaining / steps
-                self._bar_fill.place(x=0, y=0, relwidth=fraction, height=2)
+                self._bar_fill.place(x=0, y=0, relwidth=max(fraction, 0.0), height=2)
                 # Color shift: green → yellow → red
                 if fraction > 0.5:
                     color = '#4DFFB4'
