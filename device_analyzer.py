@@ -222,7 +222,25 @@ def analyse(progress_callback=None, cancel_event=None):
 
     os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
 
+    def _ensure_dependencies():
+        try:
+            import huggingface_hub
+            import faster_whisper
+        except ImportError:
+            _report("📦 Installing required AI packages (one-time setup)...")
+            import subprocess
+            import sys
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "huggingface_hub", "faster-whisper"],
+                capture_output=True
+            )
+            # Try reloading
+            import importlib
+            import site
+            importlib.reload(site)
+
     def _ensure_and_load_whisper(model_size):
+        _ensure_dependencies()
         from huggingface_hub import snapshot_download
         
         class CustomTqdm:
