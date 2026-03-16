@@ -98,9 +98,9 @@ def _get_system_info():
 def _pick_whisper_model(gpu, system):
     """Pick the BEST Whisper model the device can handle — quality first."""
     if gpu['type'] in ('cuda', 'directml'):
-        if gpu['vram_gb'] >= 8:
-            return 'medium', 'float16'  # Best quality on strong GPU
-        elif gpu['vram_gb'] >= 4:
+        if gpu['vram_gb'] >= 6:
+            return 'medium', 'float16'  # Best quality on strong GPU (6GB+)
+        elif gpu['vram_gb'] >= 3:
             return 'small', 'float16'   # Great quality on mid GPU
         else:
             return 'base', 'float16'    # Good quality on low GPU

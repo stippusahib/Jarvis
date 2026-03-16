@@ -20,7 +20,7 @@ try:
 except Exception:
     pass
 
-FILE_TRIGGERS = ["file", "document", "pdf", "sent", "shared", "report", "plan", "sheet", "read the", "check the", "did you read", "did you check", "have you seen"]
+FILE_TRIGGERS = ["file", "document", "pdf", "text", "txt", "code", "script", ".py", ".md", ".json", "spreadsheet", "docx"]
 
 def is_file_mention(text: str) -> bool:
     text_lower = text.lower()
