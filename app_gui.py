@@ -1,276 +1,294 @@
-# JARVIS Dashboard — Dark-themed GUI for managing the AI assistant.
+# JARVIS Dashboard — Premium dark-themed GUI using CustomTkinter.
 # PRIVACY: Uses settings_manager.py for the ONLY disk writes (settings.json).
-import tkinter as tk
+import customtkinter as ctk
 from tkinter import filedialog
+import tkinter as tk
 import threading
 import sys
 import os
 
 import settings_manager
 
+# ── DPI Awareness (Windows) — crisp rendering ────────────────────
+try:
+    import ctypes
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Per-monitor DPI aware
+except Exception:
+    pass
+
+# Theme
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("dark-blue")
+
 
 class JarvisDashboard:
-    """Main application window for JARVIS control and personalization."""
+    """Premium control panel for JARVIS."""
 
-    # ── Color Palette ─────────────────────────────────────────────
+    # ── Palette ───────────────────────────────────────────────────
     BG          = '#0A0F1A'
-    BG_CARD     = '#0D1117'
-    BG_INPUT    = '#161B22'
+    CARD        = '#0D1117'
+    INPUT       = '#161B22'
     BORDER      = '#1C2128'
     ACCENT      = '#4DFFB4'
-    ACCENT_DIM  = '#1F6648'
+    ACCENT_DARK = '#1F6648'
     TEXT        = '#E6EDF3'
-    TEXT_DIM    = '#7D8590'
+    DIM         = '#7D8590'
     RED         = '#FF6B6B'
     ORANGE      = '#FFB347'
-    FONT_FAMILY = 'Segoe UI'
 
     def __init__(self):
-        self.root = tk.Tk()
-        self.root.title('JARVIS — Control Panel')
-        self.root.configure(bg=self.BG)
-        self.root.resizable(False, False)
+        self.app = ctk.CTk()
+        self.app.title('JARVIS — Control Panel')
+        self.app.configure(fg_color=self.BG)
+        self.app.resizable(False, False)
 
-        # Center the window on screen
-        win_w, win_h = 520, 680
-        sx = (self.root.winfo_screenwidth() - win_w) // 2
-        sy = (self.root.winfo_screenheight() - win_h) // 2
-        self.root.geometry(f'{win_w}x{win_h}+{sx}+{sy}')
+        # Center on screen
+        w, h = 560, 720
+        x = (self.app.winfo_screenwidth() - w) // 2
+        y = (self.app.winfo_screenheight() - h) // 2
+        self.app.geometry(f'{w}x{h}+{x}+{y}')
 
         # State
         self._engine_running = False
-        self._engine_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._settings = settings_manager.load_settings()
+        self._overlay = None
+        self._ghost_root = None
 
         self._build_ui()
-        self._load_fields_from_settings()
+        self._load_fields()
 
-    # ── UI Construction ───────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════
+    #  UI CONSTRUCTION
+    # ══════════════════════════════════════════════════════════════
 
     def _build_ui(self):
-        # ─ Header ─────────────────────────────────────────
-        header = tk.Frame(self.root, bg=self.BG, height=70)
-        header.pack(fill='x', padx=24, pady=(18, 0))
+        # ─── Header ──────────────────────────────────────
+        header = ctk.CTkFrame(self.app, fg_color=self.BG, height=60)
+        header.pack(fill='x', padx=28, pady=(20, 0))
         header.pack_propagate(False)
 
-        tk.Label(
+        ctk.CTkLabel(
             header, text='⚡  JARVIS',
-            font=(self.FONT_FAMILY, 22, 'bold'),
-            fg=self.ACCENT, bg=self.BG, anchor='w'
+            font=ctk.CTkFont(family='Segoe UI', size=26, weight='bold'),
+            text_color=self.ACCENT
         ).pack(side='left')
 
-        self._status_dot = tk.Label(
+        self._status_label = ctk.CTkLabel(
             header, text='●  Stopped',
-            font=(self.FONT_FAMILY, 11),
-            fg=self.RED, bg=self.BG, anchor='e'
+            font=ctk.CTkFont(family='Segoe UI', size=13),
+            text_color=self.RED
         )
-        self._status_dot.pack(side='right')
+        self._status_label.pack(side='right')
 
         # Separator
-        tk.Frame(self.root, bg=self.BORDER, height=1).pack(fill='x', padx=24, pady=(10, 0))
+        ctk.CTkFrame(self.app, fg_color=self.BORDER, height=1).pack(fill='x', padx=28, pady=(14, 0))
 
-        # ─ Start / Stop Button ────────────────────────────
-        btn_frame = tk.Frame(self.root, bg=self.BG)
-        btn_frame.pack(fill='x', padx=24, pady=(18, 0))
-
-        self._toggle_btn = tk.Button(
-            btn_frame,
+        # ─── Engine Toggle ───────────────────────────────
+        self._toggle_btn = ctk.CTkButton(
+            self.app,
             text='▶   START JARVIS',
-            font=(self.FONT_FAMILY, 13, 'bold'),
-            fg=self.BG,
-            bg=self.ACCENT,
-            activebackground=self.ACCENT_DIM,
-            activeforeground=self.TEXT,
-            relief='flat',
-            cursor='hand2',
-            padx=20, pady=10,
+            font=ctk.CTkFont(family='Segoe UI', size=15, weight='bold'),
+            fg_color=self.ACCENT,
+            text_color=self.BG,
+            hover_color=self.ACCENT_DARK,
+            corner_radius=12,
+            height=52,
             command=self._toggle_engine
         )
-        self._toggle_btn.pack(fill='x', ipady=4)
+        self._toggle_btn.pack(fill='x', padx=28, pady=(18, 0))
 
-        # ─ Personalization Card ───────────────────────────
-        tk.Frame(self.root, bg=self.BORDER, height=1).pack(fill='x', padx=24, pady=(18, 0))
+        # ─── Personalization Section ─────────────────────
+        ctk.CTkFrame(self.app, fg_color=self.BORDER, height=1).pack(fill='x', padx=28, pady=(20, 0))
 
-        card_label = tk.Label(
-            self.root, text='PERSONALIZATION',
-            font=('Consolas', 9, 'bold'),
-            fg=self.TEXT_DIM, bg=self.BG, anchor='w'
-        )
-        card_label.pack(fill='x', padx=28, pady=(14, 0))
+        ctk.CTkLabel(
+            self.app, text='PERSONALIZATION',
+            font=ctk.CTkFont(family='Consolas', size=11, weight='bold'),
+            text_color=self.DIM
+        ).pack(anchor='w', padx=32, pady=(14, 0))
 
-        card = tk.Frame(self.root, bg=self.BG_CARD, padx=16, pady=14)
-        card.pack(fill='x', padx=24, pady=(6, 0))
+        card = ctk.CTkFrame(self.app, fg_color=self.CARD, corner_radius=12)
+        card.pack(fill='x', padx=28, pady=(8, 0))
 
         # Name
-        tk.Label(card, text='Your Name', font=(self.FONT_FAMILY, 10), fg=self.TEXT_DIM, bg=self.BG_CARD, anchor='w').pack(fill='x')
-        self._name_var = tk.StringVar()
-        name_entry = tk.Entry(
-            card, textvariable=self._name_var,
-            font=(self.FONT_FAMILY, 12), bg=self.BG_INPUT, fg=self.TEXT,
-            insertbackground=self.ACCENT, relief='flat', bd=6
+        ctk.CTkLabel(card, text='Your Name', font=ctk.CTkFont(size=12), text_color=self.DIM).pack(anchor='w', padx=16, pady=(14, 0))
+        self._name_entry = ctk.CTkEntry(
+            card, placeholder_text='e.g. Alfie',
+            font=ctk.CTkFont(size=14),
+            fg_color=self.INPUT, text_color=self.TEXT,
+            border_color=self.BORDER, corner_radius=8, height=38
         )
-        name_entry.pack(fill='x', ipady=4, pady=(2, 10))
+        self._name_entry.pack(fill='x', padx=16, pady=(4, 0))
 
         # Wake Words
-        tk.Label(card, text='Wake / Trigger Words  (comma separated)', font=(self.FONT_FAMILY, 10), fg=self.TEXT_DIM, bg=self.BG_CARD, anchor='w').pack(fill='x')
-        self._wake_var = tk.StringVar()
-        wake_entry = tk.Entry(
-            card, textvariable=self._wake_var,
-            font=(self.FONT_FAMILY, 12), bg=self.BG_INPUT, fg=self.TEXT,
-            insertbackground=self.ACCENT, relief='flat', bd=6
+        ctk.CTkLabel(card, text='Wake / Trigger Words  (comma separated)', font=ctk.CTkFont(size=12), text_color=self.DIM).pack(anchor='w', padx=16, pady=(12, 0))
+        self._wake_entry = ctk.CTkEntry(
+            card, placeholder_text='jarvis, hey jarvis, ok jarvis',
+            font=ctk.CTkFont(size=14),
+            fg_color=self.INPUT, text_color=self.TEXT,
+            border_color=self.BORDER, corner_radius=8, height=38
         )
-        wake_entry.pack(fill='x', ipady=4, pady=(2, 10))
+        self._wake_entry.pack(fill='x', padx=16, pady=(4, 0))
 
-        # Extra Vision Keywords
-        tk.Label(card, text='Extra Vision Keywords  (comma separated)', font=(self.FONT_FAMILY, 10), fg=self.TEXT_DIM, bg=self.BG_CARD, anchor='w').pack(fill='x')
-        self._vision_var = tk.StringVar()
-        vision_entry = tk.Entry(
-            card, textvariable=self._vision_var,
-            font=(self.FONT_FAMILY, 12), bg=self.BG_INPUT, fg=self.TEXT,
-            insertbackground=self.ACCENT, relief='flat', bd=6
+        # Vision Keywords
+        ctk.CTkLabel(card, text='Extra Vision Keywords  (comma separated)', font=ctk.CTkFont(size=12), text_color=self.DIM).pack(anchor='w', padx=16, pady=(12, 0))
+        self._vision_entry = ctk.CTkEntry(
+            card, placeholder_text='diagram, flowchart, architecture',
+            font=ctk.CTkFont(size=14),
+            fg_color=self.INPUT, text_color=self.TEXT,
+            border_color=self.BORDER, corner_radius=8, height=38
         )
-        vision_entry.pack(fill='x', ipady=4, pady=(2, 4))
+        self._vision_entry.pack(fill='x', padx=16, pady=(4, 0))
 
-        # ─ Save Button ────────────────────────────────────
-        save_btn = tk.Button(
-            card, text='💾  SAVE SETTINGS',
-            font=(self.FONT_FAMILY, 10, 'bold'),
-            fg=self.ACCENT, bg=self.BG_INPUT,
-            activebackground=self.BORDER,
-            activeforeground=self.TEXT,
-            relief='flat', cursor='hand2',
-            padx=12, pady=6,
+        # Save Button
+        self._save_btn = ctk.CTkButton(
+            card,
+            text='💾   SAVE SETTINGS',
+            font=ctk.CTkFont(family='Segoe UI', size=13, weight='bold'),
+            fg_color=self.INPUT,
+            text_color=self.ACCENT,
+            hover_color=self.BORDER,
+            corner_radius=8,
+            height=40,
             command=self._save_settings
         )
-        save_btn.pack(fill='x', ipady=2, pady=(8, 0))
+        self._save_btn.pack(fill='x', padx=16, pady=(14, 16))
 
-        # ─ Monitored Paths Card ──────────────────────────
-        tk.Frame(self.root, bg=self.BORDER, height=1).pack(fill='x', padx=24, pady=(18, 0))
+        # ─── Monitored Paths Section ─────────────────────
+        ctk.CTkFrame(self.app, fg_color=self.BORDER, height=1).pack(fill='x', padx=28, pady=(16, 0))
 
-        path_label = tk.Label(
-            self.root, text='MONITORED PATHS',
-            font=('Consolas', 9, 'bold'),
-            fg=self.TEXT_DIM, bg=self.BG, anchor='w'
-        )
-        path_label.pack(fill='x', padx=28, pady=(14, 0))
+        ctk.CTkLabel(
+            self.app, text='MONITORED PATHS',
+            font=ctk.CTkFont(family='Consolas', size=11, weight='bold'),
+            text_color=self.DIM
+        ).pack(anchor='w', padx=32, pady=(14, 0))
 
-        path_card = tk.Frame(self.root, bg=self.BG_CARD, padx=16, pady=10)
-        path_card.pack(fill='both', expand=True, padx=24, pady=(6, 0))
+        path_card = ctk.CTkFrame(self.app, fg_color=self.CARD, corner_radius=12)
+        path_card.pack(fill='both', expand=True, padx=28, pady=(8, 0))
 
-        # Path list (scrollable)
-        self._path_listbox = tk.Listbox(
+        # Path list using a CTkTextbox for scrollability
+        self._path_textbox = ctk.CTkTextbox(
             path_card,
-            font=('Consolas', 10),
-            bg=self.BG_INPUT, fg=self.TEXT,
-            selectbackground=self.ACCENT_DIM,
-            selectforeground=self.TEXT,
-            relief='flat', bd=4,
-            height=5
+            font=ctk.CTkFont(family='Consolas', size=12),
+            fg_color=self.INPUT,
+            text_color=self.TEXT,
+            corner_radius=8,
+            height=90,
+            state='disabled'
         )
-        self._path_listbox.pack(fill='both', expand=True, pady=(0, 6))
+        self._path_textbox.pack(fill='both', expand=True, padx=12, pady=(12, 6))
 
-        path_btn_row = tk.Frame(path_card, bg=self.BG_CARD)
-        path_btn_row.pack(fill='x')
+        # Action buttons row
+        btn_row = ctk.CTkFrame(path_card, fg_color='transparent')
+        btn_row.pack(fill='x', padx=12, pady=(0, 12))
 
-        add_folder_btn = tk.Button(
-            path_btn_row, text='📁  Add Folder',
-            font=(self.FONT_FAMILY, 9), fg=self.ACCENT, bg=self.BG_INPUT,
-            activebackground=self.BORDER, relief='flat', cursor='hand2',
-            padx=8, pady=4,
+        ctk.CTkButton(
+            btn_row, text='📁  Add Folder', width=130,
+            font=ctk.CTkFont(size=12),
+            fg_color=self.INPUT, text_color=self.ACCENT,
+            hover_color=self.BORDER, corner_radius=8, height=32,
             command=self._add_folder
-        )
-        add_folder_btn.pack(side='left', padx=(0, 4))
+        ).pack(side='left', padx=(0, 6))
 
-        add_file_btn = tk.Button(
-            path_btn_row, text='📄  Add File',
-            font=(self.FONT_FAMILY, 9), fg=self.ACCENT, bg=self.BG_INPUT,
-            activebackground=self.BORDER, relief='flat', cursor='hand2',
-            padx=8, pady=4,
+        ctk.CTkButton(
+            btn_row, text='📄  Add File', width=120,
+            font=ctk.CTkFont(size=12),
+            fg_color=self.INPUT, text_color=self.ACCENT,
+            hover_color=self.BORDER, corner_radius=8, height=32,
             command=self._add_file
-        )
-        add_file_btn.pack(side='left', padx=(0, 4))
+        ).pack(side='left', padx=(0, 6))
 
-        remove_btn = tk.Button(
-            path_btn_row, text='✕  Remove',
-            font=(self.FONT_FAMILY, 9), fg=self.RED, bg=self.BG_INPUT,
-            activebackground=self.BORDER, relief='flat', cursor='hand2',
-            padx=8, pady=4,
-            command=self._remove_path
-        )
-        remove_btn.pack(side='right')
+        ctk.CTkButton(
+            btn_row, text='✕  Remove Last', width=130,
+            font=ctk.CTkFont(size=12),
+            fg_color=self.INPUT, text_color=self.RED,
+            hover_color=self.BORDER, corner_radius=8, height=32,
+            command=self._remove_last_path
+        ).pack(side='right')
 
-        # ─ Footer ────────────────────────────────────────
-        footer = tk.Frame(self.root, bg=self.BG, height=36)
-        footer.pack(fill='x', padx=24, pady=(8, 10))
-        tk.Label(
-            footer, text='100 % Offline  •  Zero Cloud  •  RAM Only',
-            font=('Consolas', 8), fg=self.TEXT_DIM, bg=self.BG
-        ).pack(side='left')
+        # ─── Footer ──────────────────────────────────────
+        ctk.CTkLabel(
+            self.app,
+            text='100 % Offline  •  Zero Cloud  •  RAM Only',
+            font=ctk.CTkFont(family='Consolas', size=10),
+            text_color='#3A3A4A'
+        ).pack(pady=(10, 10))
 
-    # ── Field loading / saving ────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════
+    #  SETTINGS I/O
+    # ══════════════════════════════════════════════════════════════
 
-    def _load_fields_from_settings(self):
+    def _load_fields(self):
         s = self._settings
-        self._name_var.set(s.get('user_name', ''))
-        self._wake_var.set(', '.join(s.get('wake_words', [])))
-        self._vision_var.set(', '.join(s.get('vision_keywords', [])))
+        self._name_entry.insert(0, s.get('user_name', ''))
+        self._wake_entry.insert(0, ', '.join(s.get('wake_words', [])))
+        self._vision_entry.insert(0, ', '.join(s.get('vision_keywords', [])))
+        self._refresh_path_list()
 
-        self._path_listbox.delete(0, 'end')
-        for p in s.get('custom_paths', []):
-            self._path_listbox.insert('end', p)
+    def _refresh_path_list(self):
+        paths = self._settings.get('custom_paths', [])
+        self._path_textbox.configure(state='normal')
+        self._path_textbox.delete('1.0', 'end')
+        for p in paths:
+            self._path_textbox.insert('end', p + '\n')
+        self._path_textbox.configure(state='disabled')
 
     def _save_settings(self):
-        name = self._name_var.get().strip()
-        wake_raw = self._wake_var.get().strip()
-        vision_raw = self._vision_var.get().strip()
+        name = self._name_entry.get().strip()
+        wake_raw = self._wake_entry.get().strip()
+        vision_raw = self._vision_entry.get().strip()
 
         wake_words = [w.strip().lower() for w in wake_raw.split(',') if w.strip()]
         vision_kw  = [w.strip().lower() for w in vision_raw.split(',') if w.strip()]
 
-        # Auto-add user name as a wake word if provided
+        # Auto-add name as wake word
         if name and name.lower() not in wake_words:
             wake_words.append(name.lower())
 
-        paths = list(self._path_listbox.get(0, 'end'))
-
-        self._settings = {
-            'user_name': name,
-            'wake_words': wake_words,
-            'vision_keywords': vision_kw,
-            'custom_paths': paths,
-        }
+        self._settings['user_name'] = name
+        self._settings['wake_words'] = wake_words
+        self._settings['vision_keywords'] = vision_kw
         settings_manager.save_settings(self._settings)
 
-        # Flash save confirmation
-        self._flash_status('✓  Settings saved', self.ACCENT)
+        # Flash confirmation
+        self._save_btn.configure(text='✓  Saved!', text_color=self.ACCENT)
+        self.app.after(1500, lambda: self._save_btn.configure(text='💾   SAVE SETTINGS', text_color=self.ACCENT))
 
-    # ── Path management ───────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════
+    #  PATH MANAGEMENT
+    # ══════════════════════════════════════════════════════════════
 
     def _add_folder(self):
         path = filedialog.askdirectory(title='Select a folder for JARVIS to monitor')
         if path:
-            self._path_listbox.insert('end', path)
-            self._auto_save_paths()
+            paths = self._settings.get('custom_paths', [])
+            if path not in paths:
+                paths.append(path)
+                self._settings['custom_paths'] = paths
+                settings_manager.save_settings(self._settings)
+                self._refresh_path_list()
 
     def _add_file(self):
         path = filedialog.askopenfilename(title='Select a file for JARVIS to monitor')
         if path:
-            self._path_listbox.insert('end', path)
-            self._auto_save_paths()
+            paths = self._settings.get('custom_paths', [])
+            if path not in paths:
+                paths.append(path)
+                self._settings['custom_paths'] = paths
+                settings_manager.save_settings(self._settings)
+                self._refresh_path_list()
 
-    def _remove_path(self):
-        sel = self._path_listbox.curselection()
-        if sel:
-            self._path_listbox.delete(sel[0])
-            self._auto_save_paths()
+    def _remove_last_path(self):
+        paths = self._settings.get('custom_paths', [])
+        if paths:
+            paths.pop()
+            self._settings['custom_paths'] = paths
+            settings_manager.save_settings(self._settings)
+            self._refresh_path_list()
 
-    def _auto_save_paths(self):
-        paths = list(self._path_listbox.get(0, 'end'))
-        self._settings['custom_paths'] = paths
-        settings_manager.save_settings(self._settings)
-
-    # ── Engine control ────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════
+    #  ENGINE CONTROL
+    # ══════════════════════════════════════════════════════════════
 
     def _toggle_engine(self):
         if self._engine_running:
@@ -282,12 +300,21 @@ class JarvisDashboard:
         self._stop_event.clear()
         self._engine_running = True
 
-        self._toggle_btn.config(
+        self._toggle_btn.configure(
             text='■   STOP JARVIS',
-            bg=self.RED,
-            fg=self.TEXT
+            fg_color=self.RED,
+            text_color=self.TEXT,
+            hover_color='#CC5555'
         )
-        self._status_dot.config(text='●  Running', fg=self.ACCENT)
+        self._status_label.configure(text='●  Running', text_color=self.ACCENT)
+
+        # Create a SEPARATE hidden Tk root for ghost overlays
+        # This prevents the dashboard from being affected
+        def _create_ghost_root():
+            self._ghost_root = tk.Toplevel(self.app)
+            self._ghost_root.withdraw()
+
+        self.app.after(0, _create_ghost_root)
 
         self._engine_thread = threading.Thread(
             target=self._engine_worker,
@@ -298,12 +325,23 @@ class JarvisDashboard:
     def _stop_engine(self):
         self._stop_event.set()
         self._engine_running = False
-        self._toggle_btn.config(
+
+        self._toggle_btn.configure(
             text='▶   START JARVIS',
-            bg=self.ACCENT,
-            fg=self.BG
+            fg_color=self.ACCENT,
+            text_color=self.BG,
+            hover_color=self.ACCENT_DARK
         )
-        self._status_dot.config(text='●  Stopped', fg=self.RED)
+        self._status_label.configure(text='●  Stopped', text_color=self.RED)
+
+        # Destroy ghost root
+        if self._ghost_root:
+            try:
+                self._ghost_root.destroy()
+            except Exception:
+                pass
+            self._ghost_root = None
+            self._overlay = None
 
     def _engine_worker(self):
         """Runs the JARVIS live engine in a background thread."""
@@ -311,27 +349,55 @@ class JarvisDashboard:
             from context_engine import get_suggestion, prewarm_ollama
             from audio_listener import AudioListener
             from screen_reader import ScreenReader
-            from ghost_overlay import GhostOverlay
 
             prewarm_ollama()
 
-            # Build overlay in main thread
-            overlay_ref = [None]
-            ready_event = threading.Event()
+            # Wait for ghost_root to be created
+            import time
+            for _ in range(50):
+                if self._ghost_root:
+                    break
+                time.sleep(0.1)
 
-            def create_overlay():
-                overlay_ref[0] = GhostOverlay(self.root)
-                ready_event.set()
+            # Create overlay on the hidden ghost root (in main thread)
+            overlay_ready = threading.Event()
 
-            self.root.after(0, create_overlay)
-            ready_event.wait(timeout=5)
-            overlay = overlay_ref[0]
+            def _create_overlay():
+                try:
+                    from ghost_overlay import GhostOverlay
+                    self._overlay = GhostOverlay(self._ghost_root)
+                except Exception as e:
+                    print(f'⚠️  Overlay creation failed: {e}')
+                overlay_ready.set()
+
+            self.app.after(0, _create_overlay)
+            overlay_ready.wait(timeout=5)
 
             screen = ScreenReader()
             try:
-                if overlay:
-                    hwnd = overlay.get_hwnd()
+                if self._overlay:
+                    hwnd = self._overlay.get_hwnd()
                     screen.set_overlay_hwnd(hwnd)
+            except Exception:
+                pass
+
+            # Setup hotkey
+            try:
+                import keyboard
+                def on_hotkey():
+                    try:
+                        screen_b64 = screen.get_latest()
+                        if screen_b64 and self._overlay:
+                            suggestion = get_suggestion(
+                                "Analyze this screen carefully. Identify bugs, errors, or improvements. Give specific actionable feedback.",
+                                screen_b64, force_vision=True
+                            )
+                            if suggestion and suggestion != 'SILENT':
+                                self._overlay.show_popup(suggestion, "hotkey screen scan")
+                    except Exception:
+                        pass
+                keyboard.add_hotkey('ctrl+shift+j', on_hotkey, suppress=False)
+                print('🔑 Hotkey active: Ctrl+Shift+J')
             except Exception:
                 pass
 
@@ -349,9 +415,9 @@ class JarvisDashboard:
                         print(f'🎤 Heard: {audio_text[:80]}')
                         screen_b64 = screen.get_latest()
                         suggestion = get_suggestion(audio_text, screen_b64)
-                        if suggestion != 'SILENT' and overlay:
+                        if suggestion != 'SILENT' and self._overlay:
                             print(f'⚡ Suggestion: {suggestion}')
-                            overlay.show_popup(suggestion, audio_text)
+                            self._overlay.show_popup(suggestion, audio_text)
                         else:
                             print('   (SILENT)')
                 except Exception:
@@ -363,24 +429,20 @@ class JarvisDashboard:
 
         except Exception as e:
             print(f'⚠️  Engine error: {e}')
-            self.root.after(0, self._stop_engine)
+            self.app.after(0, self._stop_engine)
 
-    # ── Helpers ───────────────────────────────────────────────────
-
-    def _flash_status(self, msg: str, color: str):
-        original_text = self._status_dot.cget('text')
-        original_fg = self._status_dot.cget('fg')
-        self._status_dot.config(text=msg, fg=color)
-        self.root.after(2000, lambda: self._status_dot.config(text=original_text, fg=original_fg))
+    # ══════════════════════════════════════════════════════════════
+    #  APP LIFECYCLE
+    # ══════════════════════════════════════════════════════════════
 
     def run(self):
-        self.root.protocol('WM_DELETE_WINDOW', self._on_close)
-        self.root.mainloop()
+        self.app.protocol('WM_DELETE_WINDOW', self._on_close)
+        self.app.mainloop()
 
     def _on_close(self):
         if self._engine_running:
             self._stop_engine()
-        self.root.destroy()
+        self.app.destroy()
         sys.exit(0)
 
 
