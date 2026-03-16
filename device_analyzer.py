@@ -240,7 +240,6 @@ def analyse(progress_callback=None, cancel_event=None):
     loaded_model = whisper_model
     try:
         if not model_cached:
-            import os
             os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
             from huggingface_hub import snapshot_download
             from requests.exceptions import HTTPError
