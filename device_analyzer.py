@@ -273,8 +273,16 @@ def analyse(progress_callback=None, cancel_event=None):
             except ImportError:
                 import tqdm.auto as hf_tqdm
                 
-        original_tqdm = hf_tqdm.tqdm
-        hf_tqdm.tqdm = CustomTqdm
+        # Some versions have hf_tqdm.tqdm (a module containing the class)
+        # Some older versions have hf_tqdm as the class/module directly
+        has_attr_tqdm = hasattr(hf_tqdm, 'tqdm')
+        
+        if has_attr_tqdm:
+            original_tqdm = hf_tqdm.tqdm
+            hf_tqdm.tqdm = CustomTqdm
+        else:
+            # Fallback for very weird setups, just don't patch and let it run
+            original_tqdm = None
 
         try:
             model_path = snapshot_download(
@@ -282,10 +290,10 @@ def analyse(progress_callback=None, cancel_event=None):
                 resume_download=True
             )
         except InterruptedError:
-            hf_tqdm.tqdm = original_tqdm
+            if has_attr_tqdm: hf_tqdm.tqdm = original_tqdm
             return None, "Cancelled"
         finally:
-            hf_tqdm.tqdm = original_tqdm
+            if has_attr_tqdm: hf_tqdm.tqdm = original_tqdm
 
         if _cancelled(): return None, "Cancelled"
 
