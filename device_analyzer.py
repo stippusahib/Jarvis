@@ -247,7 +247,14 @@ def analyse(progress_callback=None, cancel_event=None):
             def write(cls, s, file=None, end="\n", nolock=False): pass
             def set_postfix(self, ordered_dict=None, refresh=True, **kwargs): pass
 
-        import huggingface_hub.utils._tqdm as hf_tqdm
+        try:
+            import huggingface_hub.utils._tqdm as hf_tqdm
+        except ImportError:
+            try:
+                import huggingface_hub.utils.tqdm as hf_tqdm
+            except ImportError:
+                import tqdm.auto as hf_tqdm
+                
         original_tqdm = hf_tqdm.tqdm
         hf_tqdm.tqdm = CustomTqdm
 
