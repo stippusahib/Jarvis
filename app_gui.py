@@ -440,17 +440,20 @@ class JarvisDashboard:
     # ══════════════════════════════════════════════════════════════
 
     def _analyse_device(self):
-        """Run device analysis in a background thread."""
+        """Run device analysis in a background thread with progress."""
         self._analyse_btn.configure(
             text='⏳  Analysing...', state='disabled',
             fg_color=self.BORDER, text_color=self.DIM
         )
-        self._device_summary.configure(text='Scanning GPU, CPU, RAM...')
+        self._device_summary.configure(text='Starting analysis...')
+
+        def _progress(msg):
+            self.app.after(0, lambda: self._device_summary.configure(text=msg))
 
         def _run():
             try:
                 import device_analyzer
-                profile = device_analyzer.analyse()
+                profile = device_analyzer.analyse(progress_callback=_progress)
                 self.app.after(0, lambda: self._on_analysis_done(profile))
             except Exception as e:
                 self.app.after(0, lambda: self._on_analysis_done(None, str(e)))

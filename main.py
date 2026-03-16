@@ -1,8 +1,7 @@
 # PRIVACY: RAM-only. Zero disk I/O.
-# THESE TWO LINES MUST BE FIRST — before ALL other imports
+# Allow HuggingFace to download models when needed (e.g. after device analysis)
 import os
-os.environ["HF_HUB_OFFLINE"] = "1"       # prevents 30s hang on airplane mode
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"    # prevents transformers pipeline hangs
 
 # DPI Awareness — MUST be before any tkinter import
 try:

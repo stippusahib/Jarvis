@@ -165,15 +165,41 @@ def _get_performance_tier(gpu, system):
         return '🔴 Minimal'
 
 
-def analyse():
-    """Run full device analysis and return optimal config."""
+def analyse(progress_callback=None):
+    """Run full device analysis and return optimal config.
+    
+    progress_callback(msg): optional function to update UI with status messages.
+    """
+    def _report(msg):
+        if progress_callback:
+            progress_callback(msg)
+        print(f'🔍 {msg}')
+
+    _report('Detecting GPU...')
     gpu = _get_gpu_info()
+    _report(f'GPU: {gpu["name"]} ({gpu["type"]})')
+
+    _report('Checking CPU & RAM...')
     system = _get_system_info()
+    _report(f'RAM: {system["ram_gb"]}GB, CPU: {system["cpu_cores"]} cores')
 
     whisper_model, compute_type = _pick_whisper_model(gpu, system)
     preferred, lightweight, vision = _pick_ollama_models(gpu, system)
     capture = _pick_capture_settings(gpu, system)
     tier = _get_performance_tier(gpu, system)
+
+    # Pre-download Whisper model if not cached
+    _report(f'Checking Whisper model: {whisper_model}...')
+    try:
+        # Ensure downloads are allowed
+        os.environ.pop('HF_HUB_OFFLINE', None)
+        from faster_whisper import WhisperModel
+        _report(f'⬇️ Downloading Whisper {whisper_model} (if needed)...')
+        _test = WhisperModel(whisper_model, device='cpu', compute_type='int8')
+        del _test
+        _report(f'✅ Whisper {whisper_model} ready')
+    except Exception as e:
+        _report(f'⚠️ Whisper download issue: {e}')
 
     profile = {
         'gpu_type': gpu['type'],
@@ -198,6 +224,7 @@ def analyse():
     settings['device_profile'] = profile
     settings_manager.save_settings(settings)
 
+    _report(f'Done! Tier: {tier}')
     return profile
 
 

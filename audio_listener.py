@@ -57,6 +57,10 @@ class AudioListener:
             whisper_model = 'small'
             compute_type = None
 
+        # Allow model downloads
+        import os
+        os.environ.pop('HF_HUB_OFFLINE', None)
+
         # CUDA auto-detection (fallback if no profile)
         try:
             import torch
