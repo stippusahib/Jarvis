@@ -29,9 +29,9 @@ class JarvisDashboard:
     CARD        = '#111827'
     INPUT       = '#1A2332'
     BORDER      = '#1E293B'
-    ACCENT      = '#4DFFB4'
-    ACCENT_DARK = '#1B7A4E'
-    ACCENT_GLOW = '#2AF598'
+    ACCENT      = '#9D4EDD'
+    ACCENT_DARK = '#7B2CBF'
+    ACCENT_GLOW = '#C77DFF'
     TEXT        = '#F1F5F9'
     TEXT_SEC    = '#94A3B8'
     DIM         = '#64748B'
@@ -423,16 +423,22 @@ class JarvisDashboard:
     def _start_engine(self):
         self._stop_event.clear()
         self._engine_running = True
+        self._engine_ready = threading.Event()
 
+        # Show loading state immediately
         self._toggle_btn.configure(
-            text='■   STOP JARVIS',
-            fg_color=self.RED,
-            text_color=self.TEXT,
-            hover_color=self.RED_DARK
+            text='⏳  Loading...',
+            fg_color=self.BORDER,
+            text_color=self.DIM,
+            hover_color=self.BORDER,
+            state='disabled'
         )
-        self._status_text.configure(text='Online', text_color=self.ACCENT)
-        self._status_dot.configure(text_color=self.ACCENT)
-        self._start_pulse()
+        self._status_text.configure(text='Starting...', text_color=self.ORANGE)
+        self._status_dot.configure(text_color=self.ORANGE)
+
+        # Start loading animation
+        self._loading_step = 0
+        self._loading_animate()
 
         # Separate hidden root for ghost overlay
         def _create_ghost():
@@ -442,6 +448,36 @@ class JarvisDashboard:
 
         self._engine_thread = threading.Thread(target=self._engine_worker, daemon=True)
         self._engine_thread.start()
+
+        # Poll for engine ready
+        self._check_engine_ready()
+
+    def _loading_animate(self):
+        """Cycle dots animation on the loading button."""
+        if not self._engine_running or self._engine_ready.is_set():
+            return
+        dots = ['⏳  Loading.', '⏳  Loading..', '⏳  Loading...']
+        self._toggle_btn.configure(text=dots[self._loading_step % 3])
+        self._loading_step += 1
+        self._pulse_after = self.app.after(400, self._loading_animate)
+
+    def _check_engine_ready(self):
+        """Poll until engine signals ready, then switch to STOP state."""
+        if self._engine_ready.is_set():
+            self._toggle_btn.configure(
+                text='■   STOP JARVIS',
+                fg_color=self.RED,
+                text_color=self.TEXT,
+                hover_color=self.RED_DARK,
+                state='normal'
+            )
+            self._status_text.configure(text='Online', text_color=self.ACCENT)
+            self._status_dot.configure(text_color=self.ACCENT)
+            self._start_pulse()
+            return
+        if not self._engine_running:
+            return
+        self.app.after(200, self._check_engine_ready)
 
     def _stop_engine(self):
         self._stop_event.set()
@@ -548,6 +584,9 @@ class JarvisDashboard:
             screen.start()
             screen.interval = 4
             print('🧠 JARVIS engine started from GUI')
+
+            # Signal GUI that engine is ready
+            self._engine_ready.set()
 
             while not self._stop_event.is_set():
                 try:

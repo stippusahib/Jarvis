@@ -34,7 +34,7 @@ class HistoryPanel:
         title = tk.Label(
             header_frame, text="🧠 SAVED SUGGESTIONS",
             font=("Consolas", 9, "bold"),
-            fg='#4DFFB4', bg='#0C1220', anchor='w'
+            fg='#9D4EDD', bg='#0C1220', anchor='w'
         )
         title.pack(side='left')
         
@@ -89,7 +89,7 @@ class HistoryPanel:
                 from context_engine import record_feedback
                 record_feedback(text, score)
                 # Visual acknowledge
-                btn_up.config(fg='#4DFFB4' if score > 0 else '#555555')
+                btn_up.config(fg='#9D4EDD' if score > 0 else '#555555')
                 btn_down.config(fg='#FF4D4D' if score < 0 else '#555555')
                 # Disable further clicks on this item
                 btn_up.unbind("<Button-1>")
@@ -202,7 +202,7 @@ class PopupWindow:
         self.label_glow = tk.Label(
             self.header_frame, text="⚡  JARVIS",
             font=("Consolas", 9, "bold"),
-            fg='#1F6648', bg='#0C1220', anchor='w'
+            fg='#7B2CBF', bg='#0C1220', anchor='w'
         )
         self.label_glow.place(x=0, y=1, relwidth=0.75, relheight=1.0)
         
@@ -210,7 +210,7 @@ class PopupWindow:
         self.label_header = tk.Label(
             self.header_frame, text="⚡  JARVIS",
             font=("Consolas", 9, "bold"),
-            fg='#4DFFB4', bg='#0C1220', anchor='w'
+            fg='#9D4EDD', bg='#0C1220', anchor='w'
         )
         self.label_header.place(x=0, y=0, relwidth=0.75, relheight=1.0)
         
@@ -286,7 +286,7 @@ class PopupWindow:
             # Countdown progress bar
             self._bar_frame = tk.Frame(self.inner, bg='#1A1A2A', height=2)
             self._bar_frame.pack(fill='x', pady=(8, 0))
-            self._bar_fill = tk.Frame(self._bar_frame, bg='#4DFFB4', height=2)
+            self._bar_fill = tk.Frame(self._bar_frame, bg='#9D4EDD', height=2)
             self._bar_fill.place(x=0, y=0, relwidth=1.0, height=2)
             self._bar_after_id = None
             
@@ -334,7 +334,7 @@ class PopupWindow:
                     fix_frame,
                     text=fix_text,
                     font=("Consolas", 10),
-                    fg='#4DFFB4',
+                    fg='#9D4EDD',
                     bg='#161B22',
                     wraplength=300,
                     justify='left',
@@ -347,7 +347,7 @@ class PopupWindow:
                     fix_frame,
                     text="⎘",
                     font=("Consolas", 11, "bold"),
-                    fg='#4DFFB4',
+                    fg='#9D4EDD',
                     bg='#0D1117',
                     activebackground='#1C2128',
                     activeforeground='#FFFFFF',
@@ -393,7 +393,7 @@ class PopupWindow:
             # Flash copy button green briefly
             if self.copy_btn:
                 self.copy_btn.config(text="✓", fg='#00FF88')
-                self.window.after(1000, lambda: self.copy_btn.config(text="⎘", fg='#4DFFB4') if self.copy_btn else None)
+                self.window.after(1000, lambda: self.copy_btn.config(text="⎘", fg='#9D4EDD') if self.copy_btn else None)
             print(f"📋 Copied to clipboard: {text[:50]}...")
         except Exception as e:
             print(f"⚠️  Clipboard error: {e}")
@@ -402,7 +402,7 @@ class PopupWindow:
         """Pulse border from dark to mint green and back on appear."""
         if self._dismissed: return
         pulse_colors = [
-            '#3A3A3A', '#4A5A4A', '#4DFFB4', '#4DFFB4',
+            '#3A3A3A', '#4A5A4A', '#9D4EDD', '#9D4EDD',
             '#4A5A4A', '#3A3A3A'
         ]
         if step < len(pulse_colors):
@@ -424,7 +424,7 @@ class PopupWindow:
                 self._bar_fill.place(x=0, y=0, relwidth=max(fraction, 0.0), height=2)
                 # Color shift: green → yellow → red
                 if fraction > 0.5:
-                    color = '#4DFFB4'
+                    color = '#9D4EDD'
                 elif fraction > 0.25:
                     color = '#FFB347'
                 else:
@@ -698,7 +698,7 @@ class ChatPanel:
         self.window.configure(bg='#060B14')
         
         # Outer border
-        outer = tk.Frame(self.window, bg='#2A3A4A', padx=1, pady=1)
+        outer = tk.Frame(self.window, bg='#1E293B', padx=1, pady=1)
         outer.pack(fill='both', expand=True)
         
         inner = tk.Frame(outer, bg='#060B14', padx=0, pady=0)
@@ -712,7 +712,7 @@ class ChatPanel:
             header_frame,
             text=f"💬 CHAT  ({self.MAX_MESSAGES}/5 messages left)",
             font=("Consolas", 9, "bold"),
-            fg='#4DFFB4', bg='#060B14',
+            fg='#9D4EDD', bg='#060B14',
             anchor='w', padx=12, pady=6
         )
         self.header.pack(side='left', fill='x', expand=True)
@@ -731,7 +731,7 @@ class ChatPanel:
         close_btn.bind("<Leave>", lambda e: close_btn.config(fg='#888888'))
         
         # Separator
-        tk.Frame(inner, bg='#2A3A4A', height=1).pack(fill='x')
+        tk.Frame(inner, bg='#1E293B', height=1).pack(fill='x')
         
         # Chat history — scrollable text area
         self.chat_frame = tk.Frame(inner, bg='#060B14')
@@ -753,12 +753,12 @@ class ChatPanel:
         self.chat_text.pack(fill='both', expand=True)
         
         # Configure text tags for colors
-        self.chat_text.tag_configure('jarvis', foreground='#4DFFB4', font=("Consolas", 10, "bold"))
+        self.chat_text.tag_configure('jarvis', foreground='#9D4EDD', font=("Consolas", 10, "bold"))
         self.chat_text.tag_configure('user', foreground='#FFFFFF', font=("Consolas", 10))
         self.chat_text.tag_configure('system', foreground='#888888', font=("Consolas", 9, "italic"))
         
         # Separator
-        tk.Frame(inner, bg='#2A3A4A', height=1).pack(fill='x')
+        tk.Frame(inner, bg='#1E293B', height=1).pack(fill='x')
         
         # Input row
         input_frame = tk.Frame(inner, bg='#060B14', padx=8, pady=6)
@@ -771,7 +771,7 @@ class ChatPanel:
             font=("Consolas", 10),
             bg='#161B22',
             fg='#FFFFFF',
-            insertbackground='#4DFFB4',
+            insertbackground='#9D4EDD',
             relief='flat',
             bd=4
         )
@@ -785,7 +785,7 @@ class ChatPanel:
             input_frame,
             text="▶",
             font=("Consolas", 11, "bold"),
-            fg='#4DFFB4',
+            fg='#9D4EDD',
             bg='#0C1220',
             activebackground='#1C2128',
             activeforeground='#FFFFFF',
@@ -875,7 +875,7 @@ class ChatPanel:
         remaining = self.MAX_MESSAGES - self.message_count
         
         # Update header
-        color = '#FF6B6B' if remaining <= 1 else '#4DFFB4'
+        color = '#FF6B6B' if remaining <= 1 else '#9D4EDD'
         self.header.config(
             text=f"💬 CHAT  ({remaining}/5 messages left)",
             fg=color
