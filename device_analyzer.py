@@ -239,7 +239,60 @@ def analyse(progress_callback=None, cancel_event=None):
     # Download / verify the model
     loaded_model = whisper_model
     try:
+        if not model_cached:
+            import os
+            os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
+            from huggingface_hub import snapshot_download
+            from requests.exceptions import HTTPError
+
+            # We create a dummy tqdm class to capture progress and send it to our UI
+            class CustomTqdm:
+                def __init__(self, *args, **kwargs):
+                    self.total = kwargs.get('total', 100)
+                    self.n = 0
+                    if kwargs.get('desc', '') == 'Fetching 14 files':
+                        _report(f"⬇️ Preparing {whisper_model} download...")
+                def update(self, n=1):
+                    if _cancelled():
+                        raise InterruptedError("Download cancelled by user")
+                    self.n += n
+                    if self.total > 0 and self.total > 100:  # Size in bytes
+                        percent = int((self.n / self.total) * 100)
+                        # Only update every few percent to avoid UI spam
+                        if percent % 5 == 0:
+                            mb_done = int(self.n / 1024 / 1024)
+                            mb_total = int(self.total / 1024 / 1024)
+                            _report(f"⬇️ Downloading {whisper_model} ({percent}% — {mb_done}MB / {mb_total}MB)")
+                def close(self): pass
+                def __enter__(self): return self
+                def __exit__(self, exc_type, exc_val, exc_tb): pass
+                @classmethod
+                def write(cls, s, file=None, end="\n", nolock=False): pass
+                def set_postfix(self, ordered_dict=None, refresh=True, **kwargs): pass
+
+            # Monkey-patch tqdm in huggingface_hub
+            import huggingface_hub.utils._tqdm as hf_tqdm
+            original_tqdm = hf_tqdm.tqdm
+            hf_tqdm.tqdm = CustomTqdm
+
+            try:
+                snapshot_download(
+                    repo_id=f"Systran/faster-whisper-{whisper_model}",
+                    local_dir_use_symlinks=False,
+                    resume_download=True
+                )
+            except InterruptedError:
+                # Restore tqdm
+                hf_tqdm.tqdm = original_tqdm
+                return None  # Cancelled
+            finally:
+                # Restore tqdm
+                hf_tqdm.tqdm = original_tqdm
+
+        if _cancelled(): return None
+
         from faster_whisper import WhisperModel
+        _report(f'⏳ Instantiating {whisper_model}...')
         _test = WhisperModel(whisper_model, device='cpu', compute_type='int8')
         del _test
         import gc; gc.collect()
