@@ -440,10 +440,22 @@ class JarvisDashboard:
     # ══════════════════════════════════════════════════════════════
 
     def _analyse_device(self):
-        """Run device analysis in a background thread with progress."""
+        """Run device analysis in a background thread with cancel support."""
+        if hasattr(self, '_analyse_cancel') and self._analyse_cancel:
+            # Cancel was pressed
+            self._analyse_cancel.set()
+            self._analyse_btn.configure(
+                text='🔍  ANALYSE DEVICE', state='normal',
+                fg_color=self.INPUT, text_color=self.ACCENT
+            )
+            self._device_summary.configure(text='Cancelled', text_color=self.DIM)
+            return
+
+        self._analyse_cancel = threading.Event()
         self._analyse_btn.configure(
-            text='⏳  Analysing...', state='disabled',
-            fg_color=self.BORDER, text_color=self.DIM
+            text='✕  CANCEL', state='normal',
+            fg_color=self.RED, text_color=self.TEXT,
+            hover_color=self.RED_DARK
         )
         self._device_summary.configure(text='Starting analysis...')
 
@@ -453,7 +465,12 @@ class JarvisDashboard:
         def _run():
             try:
                 import device_analyzer
-                profile = device_analyzer.analyse(progress_callback=_progress)
+                profile = device_analyzer.analyse(
+                    progress_callback=_progress,
+                    cancel_event=self._analyse_cancel
+                )
+                if profile is None:
+                    return  # Cancelled
                 self.app.after(0, lambda: self._on_analysis_done(profile))
             except Exception as e:
                 self.app.after(0, lambda: self._on_analysis_done(None, str(e)))
@@ -462,9 +479,11 @@ class JarvisDashboard:
 
     def _on_analysis_done(self, profile, error=None):
         """Called when analysis completes — update UI."""
+        self._analyse_cancel = None
         self._analyse_btn.configure(
             text='🔍  ANALYSE DEVICE', state='normal',
-            fg_color=self.INPUT, text_color=self.ACCENT
+            fg_color=self.INPUT, text_color=self.ACCENT,
+            hover_color=self.BORDER
         )
         if error:
             self._device_summary.configure(text=f'⚠️  Error: {error}', text_color=self.RED)

@@ -96,16 +96,18 @@ def _get_system_info():
 
 
 def _pick_whisper_model(gpu, system):
-    """Pick best Whisper model based on hardware. Prefers 'small' for CUDA."""
+    """Pick the BEST Whisper model the device can handle — quality first."""
     if gpu['type'] in ('cuda', 'directml'):
-        if gpu['vram_gb'] >= 4:
-            return 'small', 'float16'   # Best balance — fast + accurate on GPU
+        if gpu['vram_gb'] >= 8:
+            return 'medium', 'float16'  # Best quality on strong GPU
+        elif gpu['vram_gb'] >= 4:
+            return 'small', 'float16'   # Great quality on mid GPU
         else:
-            return 'tiny', 'float16'
+            return 'base', 'float16'    # Good quality on low GPU
     else:
-        # CPU mode — use int8 quantization for speed
+        # CPU mode — int8 quantization for speed
         if system['ram_gb'] >= 16:
-            return 'small', 'int8'
+            return 'small', 'int8'      # Best CPU can handle
         elif system['ram_gb'] >= 8:
             return 'base', 'int8'
         else:
@@ -163,41 +165,88 @@ def _get_performance_tier(gpu, system):
         return '🔴 Minimal'
 
 
-def analyse(progress_callback=None):
+def analyse(progress_callback=None, cancel_event=None):
     """Run full device analysis and return optimal config.
     
     progress_callback(msg): optional function to update UI with status messages.
+    cancel_event: optional threading.Event to cancel the analysis.
     """
     def _report(msg):
         if progress_callback:
             progress_callback(msg)
         print(f'🔍 {msg}')
 
+    def _cancelled():
+        return cancel_event and cancel_event.is_set()
+
     _report('Detecting GPU...')
     gpu = _get_gpu_info()
+    if _cancelled(): return None
     _report(f'GPU: {gpu["name"]} ({gpu["type"]})')
 
     _report('Checking CPU & RAM...')
     system = _get_system_info()
-    _report(f'RAM: {system["ram_gb"]}GB, CPU: {system["cpu_cores"]} cores')
+    if _cancelled(): return None
+    _report(f'RAM: {system["ram_gb"]}GB  •  CPU: {system["cpu_cores"]} cores')
 
     whisper_model, compute_type = _pick_whisper_model(gpu, system)
     preferred, lightweight, vision = _pick_ollama_models(gpu, system)
     capture = _pick_capture_settings(gpu, system)
     tier = _get_performance_tier(gpu, system)
 
-    # Pre-download Whisper model if not cached
-    _report(f'Checking Whisper model: {whisper_model}...')
+    # ── Check if Whisper model needs downloading ──
+    WHISPER_SIZES = {
+        'tiny': '~75 MB', 'base': '~150 MB', 'small': '~500 MB',
+        'medium': '~1.5 GB', 'large-v2': '~3 GB'
+    }
+
+    os.environ.pop('HF_HUB_OFFLINE', None)
+    os.environ.pop('TRANSFORMERS_OFFLINE', None)
+    os.environ['HF_HUB_OFFLINE'] = '0'
+
+    # Check if model is cached
+    model_cached = False
     try:
-        # Ensure downloads are allowed
-        os.environ.pop('HF_HUB_OFFLINE', None)
+        from huggingface_hub import scan_cache_dir
+        cache = scan_cache_dir()
+        cached_repos = [r.repo_id for r in cache.repos]
+        model_repo = f'Systran/faster-whisper-{whisper_model}'
+        model_cached = model_repo in cached_repos
+    except Exception:
+        pass  # If we can't check, assume not cached
+
+    if not model_cached:
+        size = WHISPER_SIZES.get(whisper_model, '~500 MB')
+        _report(f'⬇️ Downloading Whisper {whisper_model} ({size})...')
+        if _cancelled(): return None
+    else:
+        _report(f'✅ Whisper {whisper_model} already cached')
+
+    # Download / verify the model
+    loaded_model = whisper_model
+    try:
         from faster_whisper import WhisperModel
-        _report(f'⬇️ Downloading Whisper {whisper_model} (if needed)...')
         _test = WhisperModel(whisper_model, device='cpu', compute_type='int8')
         del _test
+        import gc; gc.collect()
         _report(f'✅ Whisper {whisper_model} ready')
     except Exception as e:
-        _report(f'⚠️ Whisper download issue: {e}')
+        _report(f'⚠️ {whisper_model} failed — trying fallback...')
+        # Try fallbacks
+        for fb in ['small', 'base', 'tiny']:
+            if fb == whisper_model:
+                continue
+            try:
+                from faster_whisper import WhisperModel as WM2
+                _test = WM2(fb, device='cpu', compute_type='int8')
+                del _test
+                loaded_model = fb
+                _report(f'✅ Using Whisper {fb} (fallback)')
+                break
+            except Exception:
+                continue
+
+    if _cancelled(): return None
 
     profile = {
         'gpu_type': gpu['type'],
@@ -207,7 +256,7 @@ def analyse(progress_callback=None):
         'cpu_cores': system['cpu_cores'],
         'cpu_name': system['cpu_name'],
         'tier': tier,
-        'whisper_model': whisper_model,
+        'whisper_model': loaded_model,
         'compute_type': compute_type,
         'preferred_models': preferred,
         'lightweight_models': lightweight,
@@ -222,7 +271,7 @@ def analyse(progress_callback=None):
     settings['device_profile'] = profile
     settings_manager.save_settings(settings)
 
-    _report(f'Done! Tier: {tier}')
+    _report(f'Done! {tier}')
     return profile
 
 
