@@ -4,6 +4,13 @@ import os
 os.environ["HF_HUB_OFFLINE"] = "1"       # prevents 30s hang on airplane mode
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
+# DPI Awareness — MUST be before any tkinter import
+try:
+    import ctypes
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)
+except Exception:
+    pass
+
 import sys
 import time
 import threading

@@ -18,30 +18,30 @@ class HistoryPanel:
         self.window.overrideredirect(True)
         self.window.attributes('-topmost', True)
         self.window.attributes('-alpha', 0.95)
-        self.window.configure(bg='#0D1117')
+        self.window.configure(bg='#0C1220')
         
         # Border
-        outer = tk.Frame(self.window, bg='#3A3A3A', padx=1, pady=1)
+        outer = tk.Frame(self.window, bg='#1E293B', padx=1, pady=1)
         outer.pack(fill='both', expand=True)
         
-        self.inner = tk.Frame(outer, bg='#0D1117', padx=12, pady=12)
+        self.inner = tk.Frame(outer, bg='#0C1220', padx=12, pady=12)
         self.inner.pack(fill='both', expand=True)
         
         # Header area with close button
-        header_frame = tk.Frame(self.inner, bg='#0D1117')
+        header_frame = tk.Frame(self.inner, bg='#0C1220')
         header_frame.pack(fill='x', pady=(0, 10))
         
         title = tk.Label(
             header_frame, text="🧠 SAVED SUGGESTIONS",
             font=("Consolas", 9, "bold"),
-            fg='#4DFFB4', bg='#0D1117', anchor='w'
+            fg='#4DFFB4', bg='#0C1220', anchor='w'
         )
         title.pack(side='left')
         
         close_btn = tk.Label(
             header_frame, text="✕",
             font=("Consolas", 10),
-            fg='#888888', bg='#0D1117', cursor="hand2"
+            fg='#888888', bg='#0C1220', cursor="hand2"
         )
         close_btn.pack(side='right')
         close_btn.bind("<Button-1>", lambda e: self.hide())
@@ -181,17 +181,17 @@ class PopupWindow:
         
         self.window.attributes('-topmost', True)
         self.window.attributes('-alpha', 0.92)  # Glass transparency
-        self.window.configure(bg='#0D1117')
+        self.window.configure(bg='#0C1220')
         
         # Border simulation (bright 1px frame)
-        self.outer = tk.Frame(self.window, bg='#3A3A3A', padx=1, pady=1)
+        self.outer = tk.Frame(self.window, bg='#1E293B', padx=1, pady=1)
         self.outer.pack(fill='both', expand=True)
         
-        self.inner = tk.Frame(self.outer, bg='#0D1117', padx=18, pady=14)
+        self.inner = tk.Frame(self.outer, bg='#0C1220', padx=18, pady=14)
         self.inner.pack(fill='both', expand=True)
         
         # Header with neon glow effect via layered labels
-        self.header_frame = tk.Frame(self.inner, bg='#0D1117', height=20)
+        self.header_frame = tk.Frame(self.inner, bg='#0C1220', height=20)
         self.header_frame.pack(fill='x', pady=(0, 6))
         self.header_frame.pack_propagate(False)
         
@@ -202,7 +202,7 @@ class PopupWindow:
         self.label_glow = tk.Label(
             self.header_frame, text="⚡  JARVIS",
             font=("Consolas", 9, "bold"),
-            fg='#1F6648', bg='#0D1117', anchor='w'
+            fg='#1F6648', bg='#0C1220', anchor='w'
         )
         self.label_glow.place(x=0, y=1, relwidth=0.75, relheight=1.0)
         
@@ -210,7 +210,7 @@ class PopupWindow:
         self.label_header = tk.Label(
             self.header_frame, text="⚡  JARVIS",
             font=("Consolas", 9, "bold"),
-            fg='#4DFFB4', bg='#0D1117', anchor='w'
+            fg='#4DFFB4', bg='#0C1220', anchor='w'
         )
         self.label_header.place(x=0, y=0, relwidth=0.75, relheight=1.0)
         
@@ -218,7 +218,7 @@ class PopupWindow:
         self.label_timestamp = tk.Label(
             self.header_frame, text=timestamp,
             font=("Consolas", 8),
-            fg='#3A3A3A', bg='#0D1117', anchor='e', padx=4
+            fg='#3A3A3A', bg='#0C1220', anchor='e', padx=4
         )
         self.label_timestamp.place(relx=0.75, y=0, relwidth=0.25, relheight=1.0)
         
@@ -227,7 +227,7 @@ class PopupWindow:
             self.regen_btn = tk.Label(
                 self.header_frame, text="⟲ REGENERATE",
                 font=("Consolas", 8, "bold"),
-                fg='#888888', bg='#0D1117', cursor="hand2"
+                fg='#888888', bg='#0C1220', cursor="hand2"
             )
             self.regen_btn.pack(side='right')
             self.regen_btn.bind("<Button-1>", lambda e: self.on_regenerate())
@@ -366,7 +366,7 @@ class PopupWindow:
         # Initial hidden setup to calculate height
         sw = self.window.winfo_screenwidth()
         sh = self.window.winfo_screenheight()
-        self.window.geometry(f"380x80+{sw+100}+{sh+100}")
+        self.window.geometry(f"440x80+{sw+100}+{sh+100}")
         self.window.update_idletasks()
         
         self.width = 440  # fixed width — no dynamic calculation
@@ -695,24 +695,24 @@ class ChatPanel:
         self.window.attributes('-topmost', True)
         self.window.lift()  # ensure above all other windows
         self.window.attributes('-alpha', 0.95)
-        self.window.configure(bg='#0A0F1A')
+        self.window.configure(bg='#060B14')
         
         # Outer border
         outer = tk.Frame(self.window, bg='#2A3A4A', padx=1, pady=1)
         outer.pack(fill='both', expand=True)
         
-        inner = tk.Frame(outer, bg='#0A0F1A', padx=0, pady=0)
+        inner = tk.Frame(outer, bg='#060B14', padx=0, pady=0)
         inner.pack(fill='both', expand=True)
         
         # Header frame with close button
-        header_frame = tk.Frame(inner, bg='#0A0F1A')
+        header_frame = tk.Frame(inner, bg='#060B14')
         header_frame.pack(fill='x')
         
         self.header = tk.Label(
             header_frame,
             text=f"💬 CHAT  ({self.MAX_MESSAGES}/5 messages left)",
             font=("Consolas", 9, "bold"),
-            fg='#4DFFB4', bg='#0A0F1A',
+            fg='#4DFFB4', bg='#060B14',
             anchor='w', padx=12, pady=6
         )
         self.header.pack(side='left', fill='x', expand=True)
@@ -721,7 +721,7 @@ class ChatPanel:
             header_frame,
             text="✕",
             font=("Consolas", 10, "bold"),
-            fg='#888888', bg='#0A0F1A',
+            fg='#888888', bg='#060B14',
             cursor='hand2',
             padx=10, pady=6
         )
@@ -734,13 +734,13 @@ class ChatPanel:
         tk.Frame(inner, bg='#2A3A4A', height=1).pack(fill='x')
         
         # Chat history — scrollable text area
-        self.chat_frame = tk.Frame(inner, bg='#0A0F1A')
+        self.chat_frame = tk.Frame(inner, bg='#060B14')
         self.chat_frame.pack(fill='both', expand=True, padx=8, pady=6)
         
         self.chat_text = tk.Text(
             self.chat_frame,
             font=("Consolas", 10),
-            bg='#0A0F1A',
+            bg='#060B14',
             fg='#FFFFFF',
             relief='flat',
             bd=0,
@@ -761,7 +761,7 @@ class ChatPanel:
         tk.Frame(inner, bg='#2A3A4A', height=1).pack(fill='x')
         
         # Input row
-        input_frame = tk.Frame(inner, bg='#0A0F1A', padx=8, pady=6)
+        input_frame = tk.Frame(inner, bg='#060B14', padx=8, pady=6)
         input_frame.pack(fill='x')
         
         self.input_var = tk.StringVar()
@@ -786,7 +786,7 @@ class ChatPanel:
             text="▶",
             font=("Consolas", 11, "bold"),
             fg='#4DFFB4',
-            bg='#0D1117',
+            bg='#0C1220',
             activebackground='#1C2128',
             activeforeground='#FFFFFF',
             relief='flat',

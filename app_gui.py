@@ -10,12 +10,7 @@ import pathlib
 
 import settings_manager
 
-# ── DPI Awareness (Windows) — crisp rendering ────────────────────
-try:
-    import ctypes
-    ctypes.windll.shcore.SetProcessDpiAwareness(2)
-except Exception:
-    pass
+# ── DPI is set in main.py before any tkinter import ──────────
 
 # Theme
 ctk.set_appearance_mode("dark")
