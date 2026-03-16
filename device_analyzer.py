@@ -220,47 +220,26 @@ def analyse(progress_callback=None, cancel_event=None):
 
     os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
 
-    # Check if model is cached roughly to decide if we need to show download progress UI
-    model_cached = False
-    try:
-        from huggingface_hub import scan_cache_dir
-        cache = scan_cache_dir()
-        cached_repos = [r.repo_id for r in cache.repos]
-        model_repo = f'Systran/faster-whisper-{whisper_model}'
-        model_cached = model_repo in cached_repos
-    except Exception:
-        pass  # If we can't check, assume not cached
+    os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
 
-    if not model_cached:
-        size = WHISPER_SIZES.get(whisper_model, '~500 MB')
-        _report(f'⬇️ Downloading Whisper {whisper_model} ({size})...')
-        if _cancelled(): return None
-    else:
-        _report(f'✅ Whisper {whisper_model} already cached')
-
-    # Download / verify the model
-    loaded_model = whisper_model
-    try:
+    def _ensure_and_load_whisper(model_size):
         from huggingface_hub import snapshot_download
         
-        # We create a dummy tqdm class to capture progress and send it to our UI
         class CustomTqdm:
             def __init__(self, *args, **kwargs):
                 self.total = kwargs.get('total', 100)
                 self.n = 0
                 if kwargs.get('desc', '') == 'Fetching 14 files':
-                    _report(f"⬇️ Preparing {whisper_model} download...")
+                    _report(f"⬇️ Preparing {model_size} download...")
             def update(self, n=1):
-                if _cancelled():
-                    raise InterruptedError("Download cancelled by user")
+                if _cancelled(): raise InterruptedError()
                 self.n += n
-                if self.total > 0 and self.total > 100:  # Size in bytes
+                if self.total > 0 and self.total > 100:
                     percent = int((self.n / self.total) * 100)
-                    # Only update every few percent to avoid UI spam
                     if percent % 5 == 0:
                         mb_done = int(self.n / 1024 / 1024)
                         mb_total = int(self.total / 1024 / 1024)
-                        _report(f"⬇️ Downloading {whisper_model} ({percent}% — {mb_done}MB / {mb_total}MB)")
+                        _report(f"⬇️ Downloading {model_size} ({percent}% — {mb_done}MB / {mb_total}MB)")
             def close(self): pass
             def __enter__(self): return self
             def __exit__(self, exc_type, exc_val, exc_tb): pass
@@ -268,48 +247,60 @@ def analyse(progress_callback=None, cancel_event=None):
             def write(cls, s, file=None, end="\n", nolock=False): pass
             def set_postfix(self, ordered_dict=None, refresh=True, **kwargs): pass
 
-        # Monkey-patch tqdm in huggingface_hub
         import huggingface_hub.utils._tqdm as hf_tqdm
         original_tqdm = hf_tqdm.tqdm
         hf_tqdm.tqdm = CustomTqdm
 
         try:
             model_path = snapshot_download(
-                repo_id=f"Systran/faster-whisper-{whisper_model}",
+                repo_id=f"Systran/faster-whisper-{model_size}",
                 resume_download=True
             )
         except InterruptedError:
-            # Restore tqdm
             hf_tqdm.tqdm = original_tqdm
-            return None  # Cancelled silently
+            return None, "Cancelled"
         finally:
-            # Restore tqdm
             hf_tqdm.tqdm = original_tqdm
 
-        if _cancelled(): return None
+        if _cancelled(): return None, "Cancelled"
 
         from faster_whisper import WhisperModel
-        _report(f'⏳ Instantiating {whisper_model}...')
-        # Pass the local directory path, this disables faster_whisper's internal double-download
-        _test = WhisperModel(model_path, device='cpu', compute_type='int8')
-        del _test
-        import gc; gc.collect()
-        _report(f'✅ Whisper {whisper_model} ready')
-    except Exception as e:
-        _report(f'⚠️ {whisper_model} failed — trying fallback...')
-        # Try fallbacks
+        _report(f'⏳ Instantiating {model_size}...')
+        try:
+            _test = WhisperModel(model_path, device='cpu', compute_type='int8')
+            del _test
+            import gc; gc.collect()
+            return model_path, None
+        except Exception as e:
+            return None, str(e)
+
+    # First attempt: Target Model
+    size_str = WHISPER_SIZES.get(whisper_model, '~500 MB')
+    _report(f'⬇️ Syncing Whisper {whisper_model} ({size_str})...')
+    
+    loaded_model = whisper_model
+    model_path, err = _ensure_and_load_whisper(whisper_model)
+    
+    if _cancelled(): return None
+
+    if err:
+        err_str = str(err)
+        _report(f'⚠️ {whisper_model} failed ({err_str[:30]}...) — trying fallback...')
         for fb in ['small', 'base', 'tiny']:
-            if fb == whisper_model:
-                continue
-            try:
-                from faster_whisper import WhisperModel as WM2
-                _test = WM2(fb, device='cpu', compute_type='int8')
-                del _test
+            if fb == whisper_model: continue
+            _report(f'⬇️ Syncing fallback {fb}...')
+            model_path, err2 = _ensure_and_load_whisper(fb)
+            if _cancelled(): return None
+            if not err2:
                 loaded_model = fb
                 _report(f'✅ Using Whisper {fb} (fallback)')
                 break
-            except Exception:
-                continue
+
+    if not model_path and not _cancelled():
+        _report('❌ All Whisper models failed to load.')
+        return None
+    elif model_path:
+        _report(f'✅ Whisper {loaded_model} ready')
 
     if _cancelled(): return None
 
