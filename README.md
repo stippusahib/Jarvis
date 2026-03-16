@@ -1,56 +1,47 @@
 # JARVIS 
+### *It sees everything. Remembers nothing. Makes you superhuman.*
 
-### "It sees everything. Remembers nothing. Makes you superhuman."
+**JARVIS** is a privacy-obsessed ambient AI for Windows 11. Most "AI assistants" are just skin-deep wrappers around cloud APIs that harvest your data. JARVIS is different. It's a local-first ghost HUD that listens to your mic and reads your screen to whisper proactive suggestions without ever touching your SSD or the internet.
 
-I built JARVIS to be an ambient AI assistant for Windows 11 that actually respects your privacy. It listens to your mic, reads your screen passively, thinks using a local LLM, and whispers short, proactive suggestions via a ghost HUD overlay in the corner of your screen. 
-
-No cloud. No disk writes. Pull your WiFi cable—it still works perfectly. 
+**Zero cloud. Zero disk writes. Zero trust required. It works if you pull the WiFi cable.**
 
 ---
 
-## What's New: The Dashboard & Auto-Adapter
+## 🚀 The Latest: Auto-Adapting AI
+The new **Device Analyzer** means you don't have to guess which models your PC can handle. When you hit "Analyse Device," JARVIS benchmarks your VRAM, RAM, and CPU to instantly configure the engine:
+- **RTX GPUs (6GB+ VRAM)**: High-fidelity Whisper `medium` + crisp screen captures.
+- **Mid-Range / AMD**: Balanced Whisper `small` + optimized JPEG loop.
+- **CPU-Only / Lightweight**: Whisper `tiny` + minimal footprint to keep your system fast.
 
-The latest version now ships with a sleek GUI dashboard and a smart **Device Analyzer**. You don't need to manually configure models or resolution settings anymore. 
+*Don't have the models?* The dashboard handles the sync automatically with a clear progress bar. No more terminal wrestling.
 
-When you click "Analyse Device," JARVIS looks at your VRAM, RAM, and CPU cores, then automatically scales its engine. Have an RTX 4090? You get the Whisper medium model and high-res screen captures. Running on a standard laptop CPU? It falls back to Whisper tiny and optimizes the capture loop to prevent lag. 
+## 🛠️ One-Time Setup
+1. **Ollama**: Download and install from [ollama.ai](https://ollama.ai/download).
+2. **Brain**: Run `ollama pull mistral` (or your preferred LLM).
+3. **Run**: Keep `ollama serve` alive in the background and launch: `py -3.11 main.py`.
 
-If you don't have the required AI models on your first run, the dashboard automatically syncs and downloads them directly to your HuggingFace cache with a live progress bar. 
+*Note: JARVIS now auto-installs its own Python dependencies (`faster-whisper`, `huggingface-hub`, etc.) on the first run if they're missing.*
 
-## One-Time Setup
+## 🏗️ The Pipeline (100% RAM-Only)
+The engine is a strict one-way street that never persists data to your disk:
+1. **Mic** → Audio chunk → `faster-whisper` (Offline) → RAM.
+2. **Screen** → MSS Capture → Pillow resize → RAM.
+3. **Brain** → Local Mistral (via Ollama at `127.0.0.1`) → Response.
+4. **Display** → Ghost HUD overlay → Fade-in (200ms) → Hold (4s) → Fade-out (300ms).
+5. **Wipe** → `del` + `gc.collect()` nukes all buffers from memory.
 
-1. Install **Ollama** → [https://ollama.ai/download](https://ollama.ai/download)
-2. Open your terminal and run `ollama serve` (keep this running in the background)
-3. Pull the brain: `ollama pull mistral`
-4. Run JARVIS: `py -3.11 main.py`
+## 🔒 The Privacy Proof
+I designed this so you can prove it doesn't leak data:
+1. Turn on **Airplane Mode**.
+2. Run JARVIS. It stays 100% functional.
+3. Open **Task Manager → Performance → Disk**. You'll see absolute 0% write activity while the engine is thinking.
 
-*Note: On your very first run, JARVIS will automatically pip-install `faster-whisper` and `huggingface-hub` if you don't have them, and download the optimal Whisper audio model for your hardware.*
-
-## How to use it
-
-Just run `py -3.11 main.py`. 
-
-The GUI will launch and dock itself quietly in your system tray. Click the toggle to start the engine. You can click the "Models" panel to see exactly which Whisper model JARVIS picked for your machine, or switch to CLI mode if you prefer the raw logs. 
-
-If you are demoing this (like on a stage), you can launch with `py -3.11 main.py --demo` to bypass the privacy audit delay. 
-
-## The Privacy Proof (Try this yourself)
-
-I hate apps that phone home with my data. So I designed this to prove it doesn't. 
-
-1. Turn on **airplane mode** (do this visibly if you're showing it off). 
-2. Start the engine from the JARVIS dashboard. It works entirely offline.
-3. Open **Task Manager → Performance → Disk**. You will see exactly 0 bytes of write activity while the engine is running. 
-
-## How it works under the hood
-
-The pipeline is strictly RAM-to-RAM. 
-
-1. **Audio**: The mic feeds into faster-whisper (running offline). 
-2. **Vision**: It grabs your screen using MSS, resizes it with Pillow, and holds it in memory.
-3. **Logic**: Both inputs hit Mistral 7B via your local Ollama instance (`127.0.0.1`). 
-4. **Display**: The response triggers the ghost HUD overlay using Tkinter (200ms fade in, 4s hold, 300ms fade out). 
-5. **Wipe**: Every frame and audio chunk is destroyed (`del` + `gc.collect()`) immediately after use. It never touches your SSD. 
+## 💻 Tech Stack
+- **Audio**: `faster-whisper` (CUDA/DirectML fallback).
+- **Vision**: `MSS` + `Pillow` for screen parsing.
+- **Logic**: `Ollama` + `Mistral 7B` (or `Llava` for vision tasks).
+- **Interface**: `CustomTkinter` dashboard + `Tkinter` ghost overlay.
+- **Control**: `pystray` system tray integration.
 
 ## License
-
 MIT
