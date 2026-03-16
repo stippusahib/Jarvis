@@ -452,6 +452,7 @@ class JarvisDashboard:
         if hasattr(self, '_analyse_cancel') and self._analyse_cancel:
             # Cancel was pressed
             self._analyse_cancel.set()
+            self._analyse_cancel = None  # Reset state so we can analyse again
             self._analyse_btn.configure(
                 text='🔍  ANALYSE DEVICE', state='normal',
                 fg_color=self.INPUT, text_color=self.ACCENT
@@ -478,10 +479,11 @@ class JarvisDashboard:
                     cancel_event=self._analyse_cancel
                 )
                 if profile is None:
-                    return  # Cancelled
+                    return  # Cancelled silently
                 self.app.after(0, lambda: self._on_analysis_done(profile))
             except Exception as e:
-                self.app.after(0, lambda: self._on_analysis_done(None, str(e)))
+                error_msg = str(e)
+                self.app.after(0, lambda msg=error_msg: self._on_analysis_done(None, msg))
 
         threading.Thread(target=_run, daemon=True).start()
 
