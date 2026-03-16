@@ -9,6 +9,17 @@ SEARCH_PATHS = [
     pathlib.Path.home() / "Documents",
 ]
 
+# Append custom monitored paths from user settings
+try:
+    import settings_manager as _sm
+    _custom = _sm.get('custom_paths', [])
+    for _p in _custom:
+        _path = pathlib.Path(_p)
+        if _path not in SEARCH_PATHS:
+            SEARCH_PATHS.append(_path)
+except Exception:
+    pass
+
 FILE_TRIGGERS = ["file", "document", "pdf", "sent", "shared", "report", "plan", "sheet", "read the", "check the", "did you read", "did you check", "have you seen"]
 
 def is_file_mention(text: str) -> bool:

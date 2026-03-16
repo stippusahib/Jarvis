@@ -27,8 +27,13 @@ from tray import create_tray_icon
 def privacy_audit():
     """Scan all .py files in current directory for disk write calls."""
     violations = []
+    # Whitelist — files explicitly allowed to write to disk
+    WHITELIST = {"settings_manager.py"}
+
     for filename in os.listdir("."):
         if not filename.endswith(".py"):
+            continue
+        if filename in WHITELIST:
             continue
         try:
             with open(filename, "r", encoding="utf-8") as f:
@@ -170,9 +175,18 @@ def setup_hotkey(overlay, screen):
 
 def main():
     demo_mode = "--demo" in sys.argv
+    gui_mode = "--gui" in sys.argv or (not demo_mode and "--cli" not in sys.argv)
 
     privacy_audit()
 
+    # ── GUI Mode (default) ──────────────────────────────
+    if gui_mode and not demo_mode:
+        print("🖥️  Launching JARVIS Dashboard...")
+        from app_gui import launch
+        launch()
+        return
+
+    # ── CLI Mode (legacy / demo) ────────────────────────
     root = tk.Tk()
     root.withdraw()
     overlay = GhostOverlay(root)

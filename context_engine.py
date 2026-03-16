@@ -19,7 +19,7 @@ from file_reader import read_file_context
 OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
 OLLAMA_TAGS_URL = "http://127.0.0.1:11434/api/tags"
 OLLAMA_VISION_URL = "http://127.0.0.1:11434/api/chat"
-PREFERRED_MODELS = ["qwen2.5", "mistral", "llama3.2"]
+PREFERRED_MODELS = ["mistral", "llama3.2"]
 LIGHTWEIGHT_MODELS = ["phi3:mini", "tinyllama"]
 LLAVA_MODELS = ["llava", "llava:latest", "llava:7b"]
 _active_model_main = None
@@ -45,6 +45,15 @@ VISION_TRIGGER_KEYWORDS = [
     "on screen", "right here", "this code", "this file",
     "this function", "this error", "this line", "here"
 ]
+
+# Append custom vision keywords from user settings
+try:
+    import settings_manager as _sm
+    _extra_vision = _sm.get('vision_keywords', [])
+    if _extra_vision:
+        VISION_TRIGGER_KEYWORDS.extend([kw for kw in _extra_vision if kw not in VISION_TRIGGER_KEYWORDS])
+except Exception:
+    pass
 
 # -----------------------------------------------------------------------------
 # OS SPECIFIC DEFINITIONS
@@ -120,8 +129,18 @@ def is_battery_saver_on() -> bool:
         print(f"Power check failed: {e}")
     return False
 
-SYSTEM_PROMPT = """You are JARVIS — a fully offline AI assistant on the user's device.
-You perceive their screen and hear what they say in real-time.
+def _build_system_prompt():
+    """Build SYSTEM_PROMPT dynamically with user's name from settings."""
+    try:
+        import settings_manager
+        user_name = settings_manager.get('user_name', '')
+    except Exception:
+        user_name = ''
+
+    greeting = f"You are assisting {user_name}. " if user_name else ""
+
+    return f"""You are JARVIS — a fully offline AI assistant on the user's device.
+{greeting}You perceive their screen and hear what they say in real-time.
 
 Your job: give ONE hyper-specific, immediately useful response in 15 words or fewer.
 
@@ -146,6 +165,9 @@ Good examples:
 "Yes — the plan covers offline AI, Ghost HUD, and zero storage."
 "This function has no error handling — add a try/except before demo."
 """
+
+
+SYSTEM_PROMPT = _build_system_prompt()
 
 
 def detect_available_models():
@@ -511,7 +533,7 @@ No explanations. Just the suggestion or SILENT."""
         {"role": "user", "content": user_content}
     ]
 
-    token_limit = 80 if is_code_context else 50
+    token_limit = 120 if is_code_context else 50
     temp = 0.9 if regenerate else 0.7
 
     payload = {

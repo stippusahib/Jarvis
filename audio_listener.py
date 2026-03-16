@@ -21,7 +21,21 @@ from faster_whisper import WhisperModel
 class AudioListener:
     """Captures mic audio, transcribes with Whisper, and outputs text to a queue."""
 
-    WAKE_WORDS = ["jarvis", "hey jarvis", "ok jarvis", "yo jarvis"]
+    @staticmethod
+    def _load_wake_words():
+        """Load wake words from settings (dynamic, not hardcoded)."""
+        try:
+            import settings_manager
+            words = settings_manager.get('wake_words', ["jarvis", "hey jarvis", "ok jarvis", "yo jarvis"])
+            # Also add user name as a wake word
+            name = settings_manager.get('user_name', '')
+            if name and name.lower() not in words:
+                words.append(name.lower())
+            return words
+        except Exception:
+            return ["jarvis", "hey jarvis", "ok jarvis", "yo jarvis"]
+
+    WAKE_WORDS = _load_wake_words()
 
     RATE = 16000
     CHUNK = 1024
@@ -130,7 +144,7 @@ class AudioListener:
                 text = " ".join(valid_segments).strip()
 
                 # Debounce check
-                if text and len(text) > 18:
+                if text and len(text) > 15:
                     # Hallucination filter — reject transcriptions with fake/nonsense words
                     common_real_words = set([
                         "the", "and", "for", "you", "that", "this", "with", "have",
