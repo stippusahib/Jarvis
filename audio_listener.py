@@ -57,11 +57,13 @@ class AudioListener:
             whisper_model = 'small'
             compute_type = None
 
-        # Allow model downloads
+        # Ensure downloads are enabled (remove ALL offline flags)
         import os
         os.environ.pop('HF_HUB_OFFLINE', None)
+        os.environ.pop('TRANSFORMERS_OFFLINE', None)
+        os.environ['HF_HUB_OFFLINE'] = '0'
 
-        # CUDA auto-detection (fallback if no profile)
+        # CUDA auto-detection
         try:
             import torch
             device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -72,8 +74,28 @@ class AudioListener:
             if compute_type is None:
                 compute_type = "int8"
 
-        self.model = WhisperModel(whisper_model, device=device, compute_type=compute_type)
-        print(f"🎙️  Whisper loaded: {whisper_model} on {device.upper()} ({compute_type})")
+        # Load Whisper with fallback chain
+        fallback_chain = [whisper_model, 'small', 'base', 'tiny']
+        # Remove duplicates while preserving order
+        seen = set()
+        models_to_try = []
+        for m in fallback_chain:
+            if m not in seen:
+                seen.add(m)
+                models_to_try.append(m)
+
+        self.model = None
+        for model_name in models_to_try:
+            try:
+                self.model = WhisperModel(model_name, device=device, compute_type=compute_type)
+                print(f"🎙️  Whisper loaded: {model_name} on {device.upper()} ({compute_type})")
+                break
+            except Exception as e:
+                print(f"⚠️  Whisper {model_name} failed: {e}")
+                continue
+
+        if self.model is None:
+            raise RuntimeError("Could not load any Whisper model. Check your internet connection.")
 
         self.output_queue = queue.Queue()
         self.running = False

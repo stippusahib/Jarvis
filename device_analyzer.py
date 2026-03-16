@@ -96,20 +96,18 @@ def _get_system_info():
 
 
 def _pick_whisper_model(gpu, system):
-    """Pick best Whisper model based on hardware."""
+    """Pick best Whisper model based on hardware. Prefers 'small' for CUDA."""
     if gpu['type'] in ('cuda', 'directml'):
-        if gpu['vram_gb'] >= 8:
-            return 'small', 'float16'
-        elif gpu['vram_gb'] >= 4:
-            return 'base', 'float16'
+        if gpu['vram_gb'] >= 4:
+            return 'small', 'float16'   # Best balance — fast + accurate on GPU
         else:
             return 'tiny', 'float16'
     else:
-        # CPU / ROCm mode
+        # CPU mode — use int8 quantization for speed
         if system['ram_gb'] >= 16:
-            return 'base', 'int8'
+            return 'small', 'int8'
         elif system['ram_gb'] >= 8:
-            return 'tiny', 'int8'
+            return 'base', 'int8'
         else:
             return 'tiny', 'int8'
 

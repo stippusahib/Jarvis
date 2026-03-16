@@ -1,7 +1,5 @@
 # PRIVACY: RAM-only. Zero disk I/O.
-# Allow HuggingFace to download models when needed (e.g. after device analysis)
 import os
-os.environ["TRANSFORMERS_OFFLINE"] = "1"    # prevents transformers pipeline hangs
 
 # DPI Awareness — MUST be before any tkinter import
 try:
