@@ -23,17 +23,20 @@ class AudioListener:
 
     @staticmethod
     def _load_wake_words():
-        """Load wake words from settings (dynamic, not hardcoded)."""
+        """Load wake words from settings AND keep defaults alive."""
+        base_words = ["jarvis", "hey jarvis", "ok jarvis", "yo jarvis"]
         try:
             import settings_manager
-            words = settings_manager.get('wake_words', ["jarvis", "hey jarvis", "ok jarvis", "yo jarvis"])
-            # Also add user name as a wake word
+            custom = settings_manager.get('wake_words', [])
+            words = list(set(base_words + custom))
+            
+            # Also add user name
             name = settings_manager.get('user_name', '')
             if name and name.lower() not in words:
                 words.append(name.lower())
             return words
         except Exception:
-            return ["jarvis", "hey jarvis", "ok jarvis", "yo jarvis"]
+            return base_words
 
     WAKE_WORDS = _load_wake_words()
 
