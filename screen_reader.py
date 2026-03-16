@@ -15,8 +15,22 @@ class ScreenReader:
     def __init__(self):
         self.output_queue = queue.Queue(maxsize=1)
         self.running = False
-        self.interval = 8
-        self._overlay_hwnd = None  # Set by main.py to exclude ghost overlay
+        self._overlay_hwnd = None
+
+        # Load device-optimized settings
+        try:
+            import settings_manager
+            profile = settings_manager.get('device_profile', {})
+            res = profile.get('capture_resolution', [1280, 720])
+            self.capture_width = res[0]
+            self.capture_height = res[1]
+            self.jpeg_quality = profile.get('jpeg_quality', 55)
+            self.interval = profile.get('capture_interval', 8)
+        except Exception:
+            self.capture_width = 1280
+            self.capture_height = 720
+            self.jpeg_quality = 55
+            self.interval = 8
 
     def set_overlay_hwnd(self, hwnd):
         """Set the overlay window handle so it can be hidden during capture."""
@@ -44,9 +58,9 @@ class ScreenReader:
                     monitor = sct.monitors[1]
                     screenshot = sct.grab(monitor)
                     img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
-                    img.thumbnail((1280, 720), Image.LANCZOS)
+                    img.thumbnail((self.capture_width, self.capture_height), Image.LANCZOS)
                     buf = io.BytesIO()
-                    img.save(buf, format="JPEG", quality=55)
+                    img.save(buf, format="JPEG", quality=self.jpeg_quality)
                     b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
 
                 # Restore overlay after capture

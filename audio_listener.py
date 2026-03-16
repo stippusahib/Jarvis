@@ -47,17 +47,29 @@ class AudioListener:
     RECORD_SECONDS = 5
 
     def __init__(self):
-        # CUDA auto-detection
+        # Load device profile for optimal settings
+        try:
+            import settings_manager
+            profile = settings_manager.get('device_profile', {})
+            whisper_model = profile.get('whisper_model', 'small')
+            compute_type = profile.get('compute_type', None)
+        except Exception:
+            whisper_model = 'small'
+            compute_type = None
+
+        # CUDA auto-detection (fallback if no profile)
         try:
             import torch
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            compute = "float16" if device == "cuda" else "int8"
+            if compute_type is None:
+                compute_type = "float16" if device == "cuda" else "int8"
         except ImportError:
             device = "cpu"
-            compute = "int8"
+            if compute_type is None:
+                compute_type = "int8"
 
-        self.model = WhisperModel("small", device=device, compute_type=compute)
-        print(f"🎙️  Whisper loaded on: {device.upper()}")
+        self.model = WhisperModel(whisper_model, device=device, compute_type=compute_type)
+        print(f"🎙️  Whisper loaded: {whisper_model} on {device.upper()} ({compute_type})")
 
         self.output_queue = queue.Queue()
         self.running = False

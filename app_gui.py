@@ -46,12 +46,21 @@ class JarvisDashboard:
         self.app.configure(fg_color=self.BG_DEEP)
         self.app.resizable(False, False)
 
-        # Window icon
+        # Window icon — use .ico for Windows taskbar
+        ICO_PATH = pathlib.Path(__file__).parent / "jarvis_icon.ico"
+        try:
+            if ICO_PATH.exists():
+                self.app.iconbitmap(str(ICO_PATH))
+                # Also set the AppUserModelID so Windows groups the taskbar icon
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('jarvis.secondbrain.app')  # type: ignore
+        except Exception:
+            pass
         try:
             if ICON_PATH.exists():
                 icon_img = tk.PhotoImage(file=str(ICON_PATH))
                 self.app.iconphoto(True, icon_img)
-                self._icon_ref = icon_img  # prevent GC
+                self._icon_ref = icon_img
         except Exception:
             pass
 
@@ -153,6 +162,54 @@ class JarvisDashboard:
             text_color=self.DIM
         )
         self._engine_info.pack(side='left')
+
+        # ─── Device Card ─────────────────────────────────
+        device_card = ctk.CTkFrame(scroll, fg_color=self.CARD, corner_radius=14)
+        device_card.pack(fill='x', padx=20, pady=(12, 0))
+
+        device_inner = ctk.CTkFrame(device_card, fg_color='transparent')
+        device_inner.pack(fill='x', padx=20, pady=18)
+
+        device_header = ctk.CTkFrame(device_inner, fg_color='transparent')
+        device_header.pack(fill='x')
+
+        ctk.CTkLabel(
+            device_header, text='DEVICE',
+            font=ctk.CTkFont(family='Consolas', size=10, weight='bold'),
+            text_color=self.DIM
+        ).pack(side='left')
+
+        # Model Info button (top-right)
+        self._info_btn = ctk.CTkButton(
+            device_header, text='ℹ️ Models', width=80,
+            font=ctk.CTkFont(size=11),
+            fg_color='transparent', text_color=self.ACCENT,
+            hover_color=self.BORDER, corner_radius=6, height=26,
+            command=self._show_model_info
+        )
+        self._info_btn.pack(side='right')
+
+        # Device summary (populated after analysis)
+        self._device_summary = ctk.CTkLabel(
+            device_inner, text='No profile — click Analyse to optimize',
+            font=ctk.CTkFont(family='Consolas', size=10),
+            text_color=self.DIM, anchor='w'
+        )
+        self._device_summary.pack(fill='x', pady=(8, 0))
+
+        # Analyse button
+        self._analyse_btn = ctk.CTkButton(
+            device_inner,
+            text='🔍  ANALYSE DEVICE',
+            font=ctk.CTkFont(size=13, weight='bold'),
+            fg_color=self.INPUT, text_color=self.ACCENT,
+            hover_color=self.BORDER, corner_radius=8, height=40,
+            command=self._analyse_device
+        )
+        self._analyse_btn.pack(fill='x', pady=(10, 0))
+
+        # Load existing profile if available
+        self._refresh_device_summary()
 
         # ─── Profile Card ────────────────────────────────
         profile_card = ctk.CTkFrame(scroll, fg_color=self.CARD, corner_radius=14)
@@ -377,6 +434,152 @@ class JarvisDashboard:
         self.app.after(1500, lambda: self._save_btn.configure(
             text='💾   SAVE', fg_color=self.INPUT, text_color=self.ACCENT
         ))
+
+    # ══════════════════════════════════════════════════════════════
+    #  DEVICE ANALYSIS
+    # ══════════════════════════════════════════════════════════════
+
+    def _analyse_device(self):
+        """Run device analysis in a background thread."""
+        self._analyse_btn.configure(
+            text='⏳  Analysing...', state='disabled',
+            fg_color=self.BORDER, text_color=self.DIM
+        )
+        self._device_summary.configure(text='Scanning GPU, CPU, RAM...')
+
+        def _run():
+            try:
+                import device_analyzer
+                profile = device_analyzer.analyse()
+                self.app.after(0, lambda: self._on_analysis_done(profile))
+            except Exception as e:
+                self.app.after(0, lambda: self._on_analysis_done(None, str(e)))
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _on_analysis_done(self, profile, error=None):
+        """Called when analysis completes — update UI."""
+        self._analyse_btn.configure(
+            text='🔍  ANALYSE DEVICE', state='normal',
+            fg_color=self.INPUT, text_color=self.ACCENT
+        )
+        if error:
+            self._device_summary.configure(text=f'⚠️  Error: {error}', text_color=self.RED)
+            return
+
+        self._refresh_device_summary()
+
+        # Flash success
+        self._analyse_btn.configure(text='✓  Optimized!', fg_color=self.ACCENT_DARK, text_color=self.ACCENT_GLOW)
+        self.app.after(2000, lambda: self._analyse_btn.configure(
+            text='🔍  ANALYSE DEVICE', fg_color=self.INPUT, text_color=self.ACCENT
+        ))
+
+    def _refresh_device_summary(self):
+        """Refresh the device summary label from saved profile."""
+        try:
+            import device_analyzer
+            profile = device_analyzer.get_profile()
+            if profile:
+                gpu = profile.get('gpu_name', 'Unknown')
+                if len(gpu) > 24:
+                    gpu = gpu[:22] + '...'
+                ram = profile.get('ram_gb', '?')
+                tier = profile.get('tier', '?')
+                self._device_summary.configure(
+                    text=f'{tier}  •  {gpu}  •  {ram}GB RAM',
+                    text_color=self.TEXT_SEC
+                )
+            else:
+                self._device_summary.configure(
+                    text='No profile — click Analyse to optimize',
+                    text_color=self.DIM
+                )
+        except Exception:
+            pass
+
+    def _show_model_info(self):
+        """Show a popup with all active model and device info."""
+        try:
+            import device_analyzer
+            profile = device_analyzer.get_profile()
+        except Exception:
+            profile = None
+
+        win = ctk.CTkToplevel(self.app)
+        win.title('JARVIS — Model Info')
+        win.configure(fg_color=self.BG_DEEP)
+        win.resizable(False, False)
+        win.attributes('-topmost', True)
+
+        w, h = 380, 420
+        x = self.app.winfo_x() + 50
+        y = self.app.winfo_y() + 80
+        win.geometry(f'{w}x{h}+{x}+{y}')
+
+        # Header
+        ctk.CTkLabel(
+            win, text='⚙️  Active Configuration',
+            font=ctk.CTkFont(family='Consolas', size=14, weight='bold'),
+            text_color=self.ACCENT
+        ).pack(pady=(16, 12))
+
+        # Info frame
+        info = ctk.CTkFrame(win, fg_color=self.CARD, corner_radius=12)
+        info.pack(fill='x', padx=16, pady=(0, 12))
+
+        def _row(parent, label, value, color=None):
+            row = ctk.CTkFrame(parent, fg_color='transparent')
+            row.pack(fill='x', padx=14, pady=4)
+            ctk.CTkLabel(
+                row, text=label,
+                font=ctk.CTkFont(family='Consolas', size=10, weight='bold'),
+                text_color=self.DIM, width=130, anchor='w'
+            ).pack(side='left')
+            ctk.CTkLabel(
+                row, text=str(value),
+                font=ctk.CTkFont(family='Consolas', size=11),
+                text_color=color or self.TEXT, anchor='w'
+            ).pack(side='left', fill='x', expand=True)
+
+        if profile:
+            _row(info, 'TIER', profile.get('tier', '—'), self.ACCENT)
+            _row(info, 'GPU', profile.get('gpu_name', '—'))
+            _row(info, 'VRAM', f"{profile.get('vram_gb', '—')} GB")
+            _row(info, 'RAM', f"{profile.get('ram_gb', '—')} GB")
+            _row(info, 'CPU CORES', str(profile.get('cpu_cores', '—')))
+
+            ctk.CTkFrame(info, fg_color=self.BORDER, height=1).pack(fill='x', padx=14, pady=6)
+
+            _row(info, 'WHISPER', f"{profile.get('whisper_model', '—')} ({profile.get('compute_type', '—')})")
+            _row(info, 'MAIN MODEL', ', '.join(profile.get('preferred_models', ['—'])))
+            _row(info, 'LIGHT MODEL', ', '.join(profile.get('lightweight_models', ['—'])))
+            vision = profile.get('vision_models', [])
+            _row(info, 'VISION', ', '.join(vision) if vision else 'Disabled (CPU)')
+
+            ctk.CTkFrame(info, fg_color=self.BORDER, height=1).pack(fill='x', padx=14, pady=6)
+
+            res = profile.get('capture_resolution', [0, 0])
+            _row(info, 'CAPTURE RES', f"{res[0]}x{res[1]}")
+            _row(info, 'JPEG QUALITY', str(profile.get('jpeg_quality', '—')))
+            _row(info, 'INTERVAL', f"{profile.get('capture_interval', '—')}s")
+        else:
+            ctk.CTkLabel(
+                info, text='\nNo device profile found.\n\nClick "🔍 Analyse Device" first.\n',
+                font=ctk.CTkFont(size=12), text_color=self.DIM
+            ).pack(pady=16)
+
+        # Spacer at bottom
+        ctk.CTkFrame(info, fg_color='transparent', height=8).pack()
+
+        # Close button
+        ctk.CTkButton(
+            win, text='Close', width=100,
+            font=ctk.CTkFont(size=12),
+            fg_color=self.INPUT, text_color=self.TEXT_SEC,
+            hover_color=self.BORDER, corner_radius=8, height=32,
+            command=win.destroy
+        ).pack(pady=(0, 16))
 
     # ══════════════════════════════════════════════════════════════
     #  PATH MANAGEMENT
