@@ -77,6 +77,14 @@ class JarvisDashboard:
         self._overlay = None
         self._ghost_root = None
         self._pulse_after = None
+        self._tray = None
+
+        # System tray icon
+        try:
+            from tray import create_tray_icon
+            self._tray = create_tray_icon(lambda: self.app.after(0, self._on_close))
+        except Exception:
+            pass
 
         self._build_ui()
         self._load_fields()
@@ -847,6 +855,11 @@ class JarvisDashboard:
     def _on_close(self):
         if self._engine_running:
             self._stop_engine()
+        if self._tray:
+            try:
+                self._tray.stop()
+            except Exception:
+                pass
         self.app.destroy()
         sys.exit(0)
 

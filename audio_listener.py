@@ -97,6 +97,10 @@ class AudioListener:
         if self.model is None:
             raise RuntimeError("Could not load any Whisper model. Check your internet connection.")
 
+        # Lock offline mode — all models are loaded, no more network needed
+        os.environ['HF_HUB_OFFLINE'] = '1'
+        os.environ['TRANSFORMERS_OFFLINE'] = '1'
+
         self.output_queue = queue.Queue()
         self.running = False
         self.last_text = ""

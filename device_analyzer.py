@@ -141,24 +141,38 @@ def _pick_ollama_models(gpu, system):
 
 
 def _pick_capture_settings(gpu, system):
-    """Pick screen capture resolution, quality, and interval."""
-    if gpu['type'] in ('cuda', 'rocm') and system['ram_gb'] >= 16:
-        # High-end: crisp captures, fast interval
+    """Pick screen capture resolution, quality, and interval based on full device profile."""
+    has_gpu = gpu['type'] in ('cuda', 'rocm', 'directml')
+
+    if has_gpu and gpu['vram_gb'] >= 6 and system['ram_gb'] >= 16:
+        # Top tier: crisp, fast captures
+        return {'resolution': [1920, 1080], 'jpeg_quality': 70, 'interval': 2}
+    elif has_gpu and gpu['vram_gb'] >= 4 and system['ram_gb'] >= 8:
+        # Good GPU + decent RAM
         return {'resolution': [1280, 720], 'jpeg_quality': 60, 'interval': 3}
+    elif system['ram_gb'] >= 16:
+        # CPU but lots of RAM
+        return {'resolution': [960, 540], 'jpeg_quality': 55, 'interval': 4}
     elif system['ram_gb'] >= 8:
-        # Mid-range: balanced
-        return {'resolution': [960, 540], 'jpeg_quality': 50, 'interval': 4}
+        # Moderate RAM
+        return {'resolution': [960, 540], 'jpeg_quality': 45, 'interval': 5}
     else:
-        # Low-end: lightweight captures
-        return {'resolution': [640, 360], 'jpeg_quality': 40, 'interval': 6}
+        # Minimum viable
+        return {'resolution': [640, 360], 'jpeg_quality': 35, 'interval': 6}
 
 
 def _get_performance_tier(gpu, system):
     """Classify the device into a tier for display."""
-    if gpu['type'] in ('cuda', 'rocm') and gpu['vram_gb'] >= 6 and system['ram_gb'] >= 16:
+    has_gpu = gpu['type'] in ('cuda', 'rocm', 'directml')
+
+    if has_gpu and gpu['vram_gb'] >= 8 and system['ram_gb'] >= 16:
+        return '🟢 Ultra — Maximum Quality'
+    elif has_gpu and gpu['vram_gb'] >= 6 and system['ram_gb'] >= 12:
         return '🟢 High Performance'
-    elif gpu['type'] in ('cuda', 'rocm') and gpu['vram_gb'] >= 4:
+    elif has_gpu and gpu['vram_gb'] >= 4:
         return '🟡 Balanced'
+    elif system['ram_gb'] >= 16:
+        return '🟠 CPU Optimized'
     elif system['ram_gb'] >= 8:
         return '🟠 Lightweight'
     else:
