@@ -1,58 +1,70 @@
-# Python
+# ── Python ────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
+*.pyo
+*.pyd
+*.pyc
 *.egg
 *.egg-info/
 dist/
 build/
-eggs/
-*.whl
+.eggs/
 
-# Virtual environments
-.venv/
+# ── Virtual environments ───────────────────────────────────────────
 venv/
-ENV/
+.venv/
 env/
+ENV/
+.env/
 
-# IDE
+# ── Local secrets / config ─────────────────────────────────────────
+settings.json
+*.key
+*.pem
+*.pfx
+secrets/
+.env.*
+
+# ── Whisper / model cache ──────────────────────────────────────────
+models/
+*.bin
+*.gguf
+*.onnx
+*.pt
+*.safetensors
+hf_cache/
+huggingface_cache/
+.cache/
+
+# ── Audio temp files ───────────────────────────────────────────────
+jarvis_tts_*.mp3
+jarvis_tts_*.wav
+*.mp3
+*.wav
+
+# ── Logs / runtime state ───────────────────────────────────────────
+*.log
+logs/
+*.lock
+jarvis_pid
+
+# ── IDE / OS ───────────────────────────────────────────────────────
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
-.project
-.settings/
-
-# OS
+.cursor/
+*.suo
+*.user
 Thumbs.db
 Desktop.ini
 .DS_Store
-._*
+ehthumbs.db
 
-# Faster-Whisper model cache (downloaded at runtime)
-# Models are cached in user home, not project dir
+# ── Test / scratch ─────────────────────────────────────────────────
+test_deadlock.py
+missed.md
+*.bak
+*.tmp
+scratch/
 
-# PyInstaller
-*.spec
-
-# Logs
-*.log
-
-# Byte-compiled
-*.pyc
-
-# Distribution
-*.tar.gz
-*.zip
-
-# Gemini / Agent metadata
-.gemini/
-.agent/
-.agents/
-_agent/
-_agents/
-
-# Local brainstorming / notes
-SKILLS/
+# ── Third-party forks / vendor ────────────────────────────────────
+OpenJarvis-main/
