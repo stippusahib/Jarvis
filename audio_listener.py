@@ -1,6 +1,68 @@
 # PRIVACY: RAM-only. Zero disk I/O.
-import pyaudio
-import io
+import os
+import sys
+
+# ── Fix cublas64_12.dll loading ──────────────────────────────────
+# CTranslate2 (used by faster-whisper) needs CUDA libs on the DLL
+# search path.  Add common CUDA locations before any CUDA import.
+def _add_cuda_dll_paths():
+    """Add CUDA toolkit bin directories to DLL search path."""
+    cuda_paths = []
+
+    # 1. CUDA_PATH env var (set by NVIDIA installer)
+    cuda_home = os.environ.get('CUDA_PATH') or os.environ.get('CUDA_HOME', '')
+    if cuda_home:
+        cuda_paths.append(os.path.join(cuda_home, 'bin'))
+
+    # 2. Common NVIDIA toolkit install directories
+    for ver in ('12.9', '12.8', '12.6', '12.4', '12.3', '12.2', '12.1', '12.0'):
+        cuda_paths.append(rf'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v{ver}\bin')
+
+    # 3. Direct-import nvidia sub-packages — works for PEP 420 namespace pkgs
+    #    e.g. pip install nvidia-cublas-cu12 puts DLL in nvidia/cublas/bin/
+    _nvidia_pkgs = [
+        'nvidia.cublas',
+        'nvidia.cuda_runtime',
+        'nvidia.cudnn',
+        'nvidia.cufft',
+        'nvidia.curand',
+        'nvidia.cusolver',
+        'nvidia.cusparse',
+    ]
+    for pkg in _nvidia_pkgs:
+        try:
+            mod = __import__(pkg, fromlist=[''])
+            pkg_dir = os.path.dirname(mod.__file__)
+            for sub in ('bin', 'lib'):
+                candidate = os.path.join(pkg_dir, sub)
+                if os.path.isdir(candidate):
+                    cuda_paths.append(candidate)
+        except Exception:
+            pass
+
+    # 4. PyTorch bundled CUDA libs (fallback)
+    try:
+        import torch
+        torch_lib = os.path.join(os.path.dirname(torch.__file__), 'lib')
+        if os.path.isdir(torch_lib):
+            cuda_paths.append(torch_lib)
+    except Exception:
+        pass
+
+    added = []
+    for path in cuda_paths:
+        if os.path.isdir(path) and path not in added:
+            added.append(path)
+            os.environ['PATH'] = path + os.pathsep + os.environ.get('PATH', '')
+            try:
+                os.add_dll_directory(path)
+            except (OSError, AttributeError):
+                pass
+
+_add_cuda_dll_paths()
+# ─────────────────────────────────────────────────────────────────
+
+import sounddevice as sd
 import gc
 import threading
 import queue
@@ -8,6 +70,11 @@ import time
 import difflib
 import numpy as np
 
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
 
 try:
     import noisereduce as nr
@@ -19,7 +86,11 @@ from faster_whisper import WhisperModel
 
 
 class AudioListener:
-    """Captures mic audio, transcribes with Whisper, and outputs text to a queue."""
+    """Captures mic audio, transcribes with Whisper, and outputs text to a queue.
+    
+    Outputs tagged messages: {type: 'command'|'ambient', text: '...'}
+    Command mode: after wake word, captures next 8s as dedicated command.
+    """
 
     @staticmethod
     def _load_wake_words():
@@ -43,8 +114,8 @@ class AudioListener:
     RATE = 16000
     CHUNK = 1024
     CHANNELS = 1
-    FORMAT = pyaudio.paInt16
     RECORD_SECONDS = 5
+    COMMAND_RECORD_SECONDS = 8  # Longer capture for command mode
 
     def __init__(self):
         # Load device profile for optimal settings
@@ -64,15 +135,11 @@ class AudioListener:
         os.environ['HF_HUB_OFFLINE'] = '0'
 
         # CUDA auto-detection
-        try:
-            import torch
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            if compute_type is None:
-                compute_type = "float16" if device == "cuda" else "int8"
-        except ImportError:
-            device = "cpu"
-            if compute_type is None:
-                compute_type = "int8"
+        # CTranslate2 handles CUDA internally, so we don't need PyTorch to check it.
+        # Just try CUDA first, and if it fails, the exception handler will fall back.
+        device = "cuda"
+        if compute_type is None:
+            compute_type = "float16"
 
         # Load Whisper with fallback chain
         fallback_chain = [whisper_model, 'small', 'base', 'tiny']
@@ -88,11 +155,25 @@ class AudioListener:
         for model_name in models_to_try:
             try:
                 self.model = WhisperModel(model_name, device=device, compute_type=compute_type)
-                print(f"🎙️  Whisper loaded: {model_name} on {device.upper()} ({compute_type})")
+                print(f"[Whisper] Loaded: {model_name} on {device.upper()} ({compute_type})")
                 break
             except Exception as e:
-                print(f"⚠️  Whisper {model_name} failed: {e}")
-                continue
+                print(f"[Whisper] {model_name} on {device} failed: {e}")
+                # Retry with CUDA int8
+                try:
+                    self.model = WhisperModel(model_name, device=device, compute_type='int8')
+                    print(f"[Whisper] Loaded: {model_name} on {device.upper()} (int8 fallback)")
+                    break
+                except Exception:
+                    pass
+                    
+                # If CUDA totally fails, retry with CPU int8
+                try:
+                    self.model = WhisperModel(model_name, device='cpu', compute_type='int8')
+                    print(f"[Whisper] Loaded: {model_name} on CPU (int8 fallback)")
+                    break
+                except Exception:
+                    continue
 
         if self.model is None:
             raise RuntimeError("Could not load any Whisper model. Check your internet connection.")
@@ -105,17 +186,44 @@ class AudioListener:
         self.running = False
         self.last_text = ""
         self.last_text_time = 0.0
+        self._command_mode = False
+        self._on_wake_callback = None  # Called when wake word detected (for beep)
 
-        # Mic device auto-selection
-        self._pa = pyaudio.PyAudio()
+        # Mic device auto-selection: Prefer headsets/headphones over array
         self._mic_index = None
         try:
-            default_info = self._pa.get_default_input_device_info()
-            self._mic_index = default_info["index"]
-            print(f"🎤 Mic selected: {default_info['name']} (index {self._mic_index})")
+            import sounddevice as sd
+            devices = sd.query_devices()
+            best_mic = None
+            default_mic = None
+            
+            try:
+                default_info = sd.query_devices(kind='input')
+                default_mic = default_info["name"]
+            except Exception:
+                pass
+
+            # Search for headset explicitly
+            for i, dev in enumerate(devices):
+                if dev.get('max_input_channels', 0) > 0:
+                    name = dev.get('name', '').lower()
+                    if 'headset' in name or 'bluetooth' in name or 'headphones' in name:
+                        best_mic = dev['name']
+                        break
+                        
+            self._mic_index = best_mic if best_mic else default_mic
+            
+            if self._mic_index:
+                print(f"[Mic] Selected: {self._mic_index}")
+            else:
+                print("[Mic] Using system default")
         except Exception:
-            self._mic_index = None  # PyAudio will use system default
-            print("🎤 Mic: using system default")
+            self._mic_index = None  # sounddevice will use system default
+            print("[Mic] Using system default")
+
+    def set_wake_callback(self, callback):
+        """Set callback for when wake word is detected (e.g. play beep)."""
+        self._on_wake_callback = callback
 
     def start(self):
         """Start listening in a background daemon thread."""
@@ -126,34 +234,16 @@ class AudioListener:
     def _capture_loop(self):
         """Main capture loop — records, transcribes, debounces, and queues text."""
         while self.running:
-            stream = None
             try:
-                stream = self._pa.open(
-                    format=self.FORMAT,
-                    channels=self.CHANNELS,
-                    rate=self.RATE,
-                    input=True,
-                    frames_per_buffer=self.CHUNK,
-                    input_device_index=self._mic_index,
-                )
+                num_frames = int(self.RATE * self.RECORD_SECONDS)
+                audio_array = sd.rec(num_frames, samplerate=self.RATE, channels=self.CHANNELS, dtype='float32', device=self._mic_index)
+                sd.wait()
 
-                frames = []
-                num_frames = int(self.RATE / self.CHUNK * self.RECORD_SECONDS)
-                for _ in range(num_frames):
-                    if not self.running:
-                        break
-                    data = stream.read(self.CHUNK, exception_on_overflow=False)
-                    frames.append(data)
+                if not self.running:
+                    break
 
-                stream.stop_stream()
-                stream.close()
-                stream = None
-
-                if not frames:
-                    continue
-
-                # Convert to numpy float32 array
-                audio_array = np.frombuffer(b"".join(frames), dtype=np.int16).astype(np.float32) / 32768.0
+                # Convert to numpy 1D array
+                audio_array = audio_array.flatten()
 
                 # Audio Pre-processing: Apply noise reduction
                 # Treat the first 0.5s as a noise profile if possible, or just apply stationary reduction
@@ -163,7 +253,7 @@ class AudioListener:
                 # Check audio energy — skip silent frames before calling Whisper
                 energy = float(np.abs(audio_array).mean())
                 if energy < 0.001:
-                    del audio_array, frames
+                    del audio_array
                     gc.collect()
                     continue
 
@@ -205,7 +295,7 @@ class AudioListener:
                     total_words = len(text_words)
                     if total_words > 3 and real_word_count == 0:
                         # Zero real words = pure hallucination, skip
-                        del audio_array, frames
+                        del audio_array
                         gc.collect()
                         continue
 
@@ -222,39 +312,66 @@ class AudioListener:
                         if len(cleaned) > 3:
                             text = cleaned
 
-                    # Auto-reset debounce after 12 seconds — new topic always passes
+                        # Signal wake word detected
+                        if self._on_wake_callback:
+                            try:
+                                self._on_wake_callback()
+                            except Exception:
+                                pass
+
+                        # If command has content, send as command type
+                        if len(text.strip()) > 3:
+                            self.output_queue.put({"type": "command", "text": text})
+                            self.last_text = text
+                            self.last_text_time = time.time()
+                        else:
+                            # Wake word only — enter command mode for next capture
+                            self._command_mode = True
+                            print("🎤 Wake word detected — listening for command...")
+
+                        del audio_array
+                        gc.collect()
+                        continue
+
+                    # Command mode — this block is a follow-up command
+                    if self._command_mode:
+                        self._command_mode = False
+                        if len(text.strip()) > 3:
+                            self.output_queue.put({"type": "command", "text": text})
+                            self.last_text = text
+                            self.last_text_time = time.time()
+                        del audio_array
+                        gc.collect()
+                        continue
+
+                    # Normal ambient mode — debounce and queue
                     current_time = time.time()
                     if current_time - self.last_text_time > 12:
                         self.last_text = ""
 
                     ratio = difflib.SequenceMatcher(None, self.last_text, text).ratio()
                     if ratio < 0.7:
-                        self.output_queue.put(text)
+                        self.output_queue.put({"type": "ambient", "text": text})
                         self.last_text = text
                         self.last_text_time = current_time
 
-                del audio_array, frames
+                del audio_array
                 gc.collect()
 
             except OSError:
-                print("⚠️  Mic error. Retrying in 2s...")
+                print("[Warn] Mic error. Retrying in 2s...")
                 time.sleep(2)
                 continue
             except Exception as e:
-                print(f"⚠️  Audio error: {e}")
+                print(f"[Warn] Audio error: {e}")
                 continue
             finally:
-                if stream is not None:
-                    try:
-                        stream.stop_stream()
-                        stream.close()
-                    except Exception:
-                        pass
+                pass
 
     def stop(self):
         """Stop listening and release PyAudio."""
         self.running = False
         try:
-            self._pa.terminate()
+            sd.stop()
         except Exception:
             pass
