@@ -18,27 +18,21 @@ def _add_cuda_dll_paths():
     for ver in ('12.9', '12.8', '12.6', '12.4', '12.3', '12.2', '12.1', '12.0'):
         cuda_paths.append(rf'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v{ver}\bin')
 
-    # 3. Direct-import nvidia sub-packages — works for PEP 420 namespace pkgs
-    #    e.g. pip install nvidia-cublas-cu12 puts DLL in nvidia/cublas/bin/
-    _nvidia_pkgs = [
-        'nvidia.cublas',
-        'nvidia.cuda_runtime',
-        'nvidia.cudnn',
-        'nvidia.cufft',
-        'nvidia.curand',
-        'nvidia.cusolver',
-        'nvidia.cusparse',
-    ]
-    for pkg in _nvidia_pkgs:
-        try:
-            mod = __import__(pkg, fromlist=[''])
-            pkg_dir = os.path.dirname(mod.__file__)
-            for sub in ('bin', 'lib'):
-                candidate = os.path.join(pkg_dir, sub)
-                if os.path.isdir(candidate):
-                    cuda_paths.append(candidate)
-        except Exception:
-            pass
+    # 3. Scan site-packages/nvidia/*/bin directly
+    #    PEP 420 namespace packages (nvidia.*) have __file__ = None on
+    #    Python 3.14+, so __import__ + dirname fails. Instead, walk
+    #    site-packages to find the actual DLL directories.
+    for sp in sys.path:
+        nvidia_root = os.path.join(sp, 'nvidia')
+        if os.path.isdir(nvidia_root):
+            try:
+                for subpkg in os.listdir(nvidia_root):
+                    for sub in ('bin', 'lib'):
+                        candidate = os.path.join(nvidia_root, subpkg, sub)
+                        if os.path.isdir(candidate):
+                            cuda_paths.append(candidate)
+            except OSError:
+                pass
 
     # 4. PyTorch bundled CUDA libs (fallback)
     try:
