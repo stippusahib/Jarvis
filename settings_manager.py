@@ -1,7 +1,6 @@
 # PRIVACY NOTE: This is the ONLY file that writes to disk.
 # It stores user personalization settings in settings.json (same directory).
 import json
-import os
 import pathlib
 
 _SETTINGS_FILE = pathlib.Path(__file__).parent / "settings.json"
@@ -11,6 +10,17 @@ _DEFAULTS = {
     "wake_words": ["jarvis", "hey jarvis", "ok jarvis", "yo jarvis"],
     "custom_paths": [],          # extra folders/files for file_scout
     "vision_keywords": [],       # extra vision trigger keywords
+    # ── OS Control ──
+    "os_control_enabled": True,
+    "file_control_enabled": True,
+    "system_control_enabled": True,
+    "auto_execute_safe": True,   # auto-execute 🟢 AUTO tier commands
+    "permission_level": "confirm",  # auto / confirm / admin
+    # ── Voice Engine ──
+    "voice_enabled": True,
+    "voice_speed": 175,
+    "voice_volume": 0.9,
+    "voice_id": None,            # TTS voice ID (None = default)
 }
 
 _cache: dict | None = None

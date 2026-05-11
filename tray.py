@@ -1,6 +1,5 @@
 # PRIVACY: RAM-only. Zero disk I/O.
 import threading
-import sys
 from PIL import Image, ImageDraw
 
 
