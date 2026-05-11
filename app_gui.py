@@ -1,16 +1,33 @@
 # JARVIS Dashboard — Premium dark-themed GUI using CustomTkinter.
 # PRIVACY: Uses settings_manager.py for the ONLY disk writes (settings.json).
+import os
+os.environ.setdefault('FOR_DISABLE_CONSOLE_CTRL_HANDLER', '1')
+
 import customtkinter as ctk
 from tkinter import filedialog
 import tkinter as tk
 import threading
 import sys
-import os
 import pathlib
 
 import settings_manager
 
+try:
+    import keyboard
+    HAS_KEYBOARD = True
+except Exception:
+    HAS_KEYBOARD = False
+
 # ── DPI is set in main.py before any tkinter import ──────────
+
+from context_engine import get_suggestion, get_command_response, prewarm_ollama
+from audio_listener import AudioListener
+from screen_reader import ScreenReader
+from voice_engine import VoiceEngine
+from command_parser import parse as parse_command, get_human_description
+from os_controller import OSController
+from permission_manager import PermissionManager, log_action
+from ghost_overlay import GhostOverlay
 
 # Theme
 ctk.set_appearance_mode("dark")
@@ -24,19 +41,20 @@ class JarvisDashboard:
     """Premium control panel for JARVIS."""
 
     # ── Palette ───────────────────────────────────────────────────
-    BG_DEEP     = '#060B14'
-    BG          = '#0C1220'
-    CARD        = '#111827'
-    INPUT       = '#1A2332'
-    BORDER      = '#1E293B'
-    ACCENT      = '#9D4EDD'
-    ACCENT_DARK = '#7B2CBF'
-    ACCENT_GLOW = '#C77DFF'
-    TEXT        = '#F1F5F9'
-    TEXT_SEC    = '#94A3B8'
-    DIM         = '#64748B'
+    # Zinc + Emerald palette — no AI purple, no pure black
+    BG_DEEP     = '#09090B'   # zinc-950
+    BG          = '#18181B'   # zinc-900
+    CARD        = '#27272A'   # zinc-800
+    INPUT       = '#3F3F46'   # zinc-700
+    BORDER      = '#3F3F46'   # zinc-700
+    ACCENT      = '#10B981'   # emerald-500
+    ACCENT_DARK = '#059669'   # emerald-600
+    ACCENT_GLOW = '#34D399'   # emerald-400
+    TEXT        = '#FAFAFA'   # zinc-50
+    TEXT_SEC    = '#A1A1AA'   # zinc-400
+    DIM         = '#71717A'   # zinc-500
     RED         = '#EF4444'
-    RED_DARK    = '#B91C1C'
+    RED_DARK    = '#DC2626'
     ORANGE      = '#F59E0B'
     GREEN_SOFT  = '#22C55E'
 
@@ -102,8 +120,8 @@ class JarvisDashboard:
 
         # Title
         ctk.CTkLabel(
-            top, text='  ⚡ JARVIS',
-            font=ctk.CTkFont(family='Consolas', size=18, weight='bold'),
+            top, text='  JARVIS',
+            font=ctk.CTkFont(family='Cascadia Code', size=18, weight='bold'),
             text_color=self.ACCENT
         ).pack(side='left', padx=16)
 
@@ -165,11 +183,18 @@ class JarvisDashboard:
 
         self._engine_info = ctk.CTkLabel(
             info_row,
-            text='🔑 Ctrl+Shift+J  •  🎤 Mic  •  👁️ Vision',
-            font=ctk.CTkFont(family='Consolas', size=10),
+            text='Ctrl+Shift+J  ·  Mic  ·  Vision',
+            font=ctk.CTkFont(family='Cascadia Code', size=10),
             text_color=self.DIM
         )
         self._engine_info.pack(side='left')
+
+        self._listening_indicator = ctk.CTkLabel(
+            info_row,
+            text='LISTENING',
+            font=ctk.CTkFont(family='Cascadia Code', size=11, weight='bold'),
+            text_color=self.ACCENT
+        )
 
         # ─── Device Card ─────────────────────────────────
         device_card = ctk.CTkFrame(scroll, fg_color=self.CARD, corner_radius=14)
@@ -189,7 +214,7 @@ class JarvisDashboard:
 
         # Model Info button (top-right)
         self._info_btn = ctk.CTkButton(
-            device_header, text='ℹ️ Models', width=80,
+            device_header, text='Models', width=80,
             font=ctk.CTkFont(size=11),
             fg_color='transparent', text_color=self.ACCENT,
             hover_color=self.BORDER, corner_radius=6, height=26,
@@ -208,7 +233,7 @@ class JarvisDashboard:
         # Analyse button
         self._analyse_btn = ctk.CTkButton(
             device_inner,
-            text='🔍  ANALYSE DEVICE',
+            text='ANALYSE DEVICE',
             font=ctk.CTkFont(size=13, weight='bold'),
             fg_color=self.INPUT, text_color=self.ACCENT,
             hover_color=self.BORDER, corner_radius=8, height=40,
@@ -285,7 +310,7 @@ class JarvisDashboard:
         # Save
         self._save_btn = ctk.CTkButton(
             profile_inner,
-            text='💾   SAVE',
+            text='SAVE',
             font=ctk.CTkFont(size=13, weight='bold'),
             fg_color=self.INPUT, text_color=self.ACCENT,
             hover_color=self.BORDER, corner_radius=8, height=38,
@@ -323,7 +348,7 @@ class JarvisDashboard:
         btn_row.pack(fill='x', pady=(10, 0))
 
         ctk.CTkButton(
-            btn_row, text='📁 Folder', width=100,
+            btn_row, text='+ Folder', width=100,
             font=ctk.CTkFont(size=11),
             fg_color=self.INPUT, text_color=self.ACCENT,
             hover_color=self.BORDER, corner_radius=8, height=32,
@@ -331,7 +356,7 @@ class JarvisDashboard:
         ).pack(side='left', padx=(0, 6))
 
         ctk.CTkButton(
-            btn_row, text='📄 File', width=90,
+            btn_row, text='+ File', width=90,
             font=ctk.CTkFont(size=11),
             fg_color=self.INPUT, text_color=self.ACCENT,
             hover_color=self.BORDER, corner_radius=8, height=32,
@@ -346,13 +371,149 @@ class JarvisDashboard:
             command=self._remove_last_path
         ).pack(side='right')
 
+        # ─── OS Control Card ─────────────────────────────
+        os_card = ctk.CTkFrame(scroll, fg_color=self.CARD, corner_radius=14)
+        os_card.pack(fill='x', padx=20, pady=(12, 0))
+
+        os_inner = ctk.CTkFrame(os_card, fg_color='transparent')
+        os_inner.pack(fill='x', padx=20, pady=18)
+
+        ctk.CTkLabel(
+            os_inner, text='OS CONTROL',
+            font=ctk.CTkFont(family='Consolas', size=10, weight='bold'),
+            text_color=self.DIM
+        ).pack(anchor='w')
+
+        ctk.CTkLabel(
+            os_inner, text='Enable voice commands to control your laptop',
+            font=ctk.CTkFont(size=10), text_color=self.DIM
+        ).pack(anchor='w', pady=(2, 8))
+
+        # Toggle switches
+        self._os_app_var = ctk.BooleanVar(value=self._settings.get('os_control_enabled', True))
+        self._os_file_var = ctk.BooleanVar(value=self._settings.get('file_control_enabled', True))
+        self._os_system_var = ctk.BooleanVar(value=self._settings.get('system_control_enabled', True))
+        self._os_auto_var = ctk.BooleanVar(value=self._settings.get('auto_execute_safe', True))
+
+        def _toggle_row(parent, text, var, desc=''):
+            row = ctk.CTkFrame(parent, fg_color='transparent')
+            row.pack(fill='x', pady=3)
+            ctk.CTkLabel(
+                row, text=text,
+                font=ctk.CTkFont(size=12, weight='bold'),
+                text_color=self.TEXT_SEC
+            ).pack(side='left')
+            sw = ctk.CTkSwitch(
+                row, text='', variable=var,
+                width=42, height=22,
+                fg_color=self.BORDER,
+                progress_color=self.ACCENT,
+                command=self._save_os_settings
+            )
+            sw.pack(side='right')
+            if desc:
+                ctk.CTkLabel(
+                    parent, text=desc,
+                    font=ctk.CTkFont(size=9), text_color=self.DIM
+                ).pack(anchor='w', pady=(0, 2))
+
+        _toggle_row(os_inner, 'App Control', self._os_app_var, 'Open, close, switch apps by voice')
+        _toggle_row(os_inner, 'File Control', self._os_file_var, 'Create, delete, move, search files')
+        _toggle_row(os_inner, 'System Control', self._os_system_var, 'Volume, brightness, WiFi, power')
+        _toggle_row(os_inner, 'Auto-Execute Safe', self._os_auto_var, 'Skip confirmation for safe commands')
+
+        # ─── Voice Card ──────────────────────────────────
+        voice_card = ctk.CTkFrame(scroll, fg_color=self.CARD, corner_radius=14)
+        voice_card.pack(fill='x', padx=20, pady=(12, 0))
+
+        voice_inner = ctk.CTkFrame(voice_card, fg_color='transparent')
+        voice_inner.pack(fill='x', padx=20, pady=18)
+
+        ctk.CTkLabel(
+            voice_inner, text='VOICE',
+            font=ctk.CTkFont(family='Consolas', size=10, weight='bold'),
+            text_color=self.DIM
+        ).pack(anchor='w')
+
+        ctk.CTkLabel(
+            voice_inner, text='JARVIS speaks responses aloud',
+            font=ctk.CTkFont(size=10), text_color=self.DIM
+        ).pack(anchor='w', pady=(2, 8))
+
+        # Voice enable
+        self._voice_enabled_var = ctk.BooleanVar(value=self._settings.get('voice_enabled', True))
+        voice_en_row = ctk.CTkFrame(voice_inner, fg_color='transparent')
+        voice_en_row.pack(fill='x', pady=3)
+        ctk.CTkLabel(
+            voice_en_row, text='Voice Enabled',
+            font=ctk.CTkFont(size=12, weight='bold'),
+            text_color=self.TEXT_SEC
+        ).pack(side='left')
+        ctk.CTkSwitch(
+            voice_en_row, text='', variable=self._voice_enabled_var,
+            width=42, height=22,
+            fg_color=self.BORDER,
+            progress_color=self.ACCENT,
+            command=self._save_voice_settings
+        ).pack(side='right')
+
+        # Speed slider
+        ctk.CTkLabel(
+            voice_inner, text='Speech Speed',
+            font=ctk.CTkFont(size=11, weight='bold'), text_color=self.TEXT_SEC
+        ).pack(anchor='w', pady=(10, 0))
+
+        speed_row = ctk.CTkFrame(voice_inner, fg_color='transparent')
+        speed_row.pack(fill='x', pady=(4, 0))
+
+        self._speed_label = ctk.CTkLabel(
+            speed_row, text=f"{self._settings.get('voice_speed', 175)} wpm",
+            font=ctk.CTkFont(family='Consolas', size=10), text_color=self.DIM,
+            width=60
+        )
+        self._speed_label.pack(side='right')
+
+        self._speed_slider = ctk.CTkSlider(
+            speed_row, from_=100, to=300,
+            number_of_steps=20,
+            fg_color=self.INPUT,
+            progress_color=self.ACCENT,
+            button_color=self.ACCENT_GLOW,
+            button_hover_color=self.ACCENT,
+            command=self._on_speed_change
+        )
+        self._speed_slider.set(self._settings.get('voice_speed', 175))
+        self._speed_slider.pack(side='left', fill='x', expand=True, padx=(0, 8))
+
+        # Test and Stop Voice buttons
+        voice_btn_row = ctk.CTkFrame(voice_inner, fg_color='transparent')
+        voice_btn_row.pack(fill='x', pady=(12, 0))
+
+        ctk.CTkButton(
+            voice_btn_row,
+            text='Test Voice',
+            font=ctk.CTkFont(size=11),
+            fg_color=self.INPUT, text_color=self.ACCENT,
+            hover_color=self.BORDER, corner_radius=8, height=32,
+            command=self._test_voice
+        ).pack(side='left', fill='x', expand=True, padx=(0, 4))
+
+        ctk.CTkButton(
+            voice_btn_row,
+            text='Stop Voice',
+            font=ctk.CTkFont(size=11),
+            fg_color=self.INPUT, text_color=self.RED,
+            hover_color=self.BORDER, corner_radius=8, height=32,
+            command=self._stop_voice
+        ).pack(side='right', fill='x', expand=True, padx=(4, 0))
+
         # ─── Footer ──────────────────────────────────────
         footer = ctk.CTkFrame(scroll, fg_color='transparent')
         footer.pack(fill='x', padx=20, pady=(16, 16))
 
         ctk.CTkLabel(
             footer,
-            text='100% Offline  •  Zero Cloud  •  RAM Only  •  Privacy First',
+            text='Voice Controlled  •  Full OS Access  •  Offline  •  Private',
             font=ctk.CTkFont(family='Consolas', size=9),
             text_color='#334155'
         ).pack()
@@ -438,10 +599,47 @@ class JarvisDashboard:
         settings_manager.save_settings(self._settings)
 
         # Flash
-        self._save_btn.configure(text='✓  Saved!', fg_color=self.ACCENT_DARK, text_color=self.ACCENT_GLOW)
+        self._save_btn.configure(text='SAVED', fg_color=self.ACCENT_DARK, text_color=self.ACCENT_GLOW)
         self.app.after(1500, lambda: self._save_btn.configure(
-            text='💾   SAVE', fg_color=self.INPUT, text_color=self.ACCENT
+            text='SAVE', fg_color=self.INPUT, text_color=self.ACCENT
         ))
+
+    def _save_os_settings(self):
+        """Save OS control toggles to settings."""
+        self._settings['os_control_enabled'] = self._os_app_var.get()
+        self._settings['file_control_enabled'] = self._os_file_var.get()
+        self._settings['system_control_enabled'] = self._os_system_var.get()
+        self._settings['auto_execute_safe'] = self._os_auto_var.get()
+        settings_manager.save_settings(self._settings)
+
+    def _save_voice_settings(self):
+        """Save voice settings."""
+        self._settings['voice_enabled'] = self._voice_enabled_var.get()
+        settings_manager.save_settings(self._settings)
+
+    def _on_speed_change(self, value):
+        """Speed slider callback."""
+        speed = int(value)
+        self._speed_label.configure(text=f'{speed} wpm')
+        self._settings['voice_speed'] = speed
+        settings_manager.save_settings(self._settings)
+
+    def _test_voice(self):
+        """Test TTS in a background thread."""
+        def _do_test():
+            try:
+                from voice_engine import VoiceEngine
+                test_ve = VoiceEngine()
+                test_ve._speed = self._settings.get('voice_speed', 175)
+                test_ve._volume = self._settings.get('voice_volume', 0.9)
+                test_ve.start()
+                import time
+                time.sleep(0.5)
+                test_ve.speak_and_wait('JARVIS online. All systems operational, sir.', timeout=8)
+                test_ve.stop()
+            except Exception as e:
+                print(f'⚠️  Voice test failed: {e}')
+        threading.Thread(target=_do_test, daemon=True).start()
 
     # ══════════════════════════════════════════════════════════════
     #  DEVICE ANALYSIS
@@ -454,7 +652,7 @@ class JarvisDashboard:
             self._analyse_cancel.set()
             self._analyse_cancel = None  # Reset state so we can analyse again
             self._analyse_btn.configure(
-                text='🔍  ANALYSE DEVICE', state='normal',
+                text='ANALYSE DEVICE', state='normal',
                 fg_color=self.INPUT, text_color=self.ACCENT
             )
             self._device_summary.configure(text='Cancelled', text_color=self.DIM)
@@ -502,9 +700,9 @@ class JarvisDashboard:
         self._refresh_device_summary()
 
         # Flash success
-        self._analyse_btn.configure(text='✓  Optimized!', fg_color=self.ACCENT_DARK, text_color=self.ACCENT_GLOW)
+        self._analyse_btn.configure(text='OPTIMIZED', fg_color=self.ACCENT_DARK, text_color=self.ACCENT_GLOW)
         self.app.after(2000, lambda: self._analyse_btn.configure(
-            text='🔍  ANALYSE DEVICE', fg_color=self.INPUT, text_color=self.ACCENT
+            text='ANALYSE DEVICE', fg_color=self.INPUT, text_color=self.ACCENT
         ))
 
     def _refresh_device_summary(self):
@@ -551,8 +749,8 @@ class JarvisDashboard:
 
         # Header
         ctk.CTkLabel(
-            win, text='⚙️  Active Configuration',
-            font=ctk.CTkFont(family='Consolas', size=14, weight='bold'),
+            win, text='Active Configuration',
+            font=ctk.CTkFont(family='Cascadia Code', size=14, weight='bold'),
             text_color=self.ACCENT
         ).pack(pady=(16, 12))
 
@@ -691,7 +889,7 @@ class JarvisDashboard:
         """Cycle dots animation on the loading button."""
         if not self._engine_running or self._engine_ready.is_set():
             return
-        dots = ['⏳  Loading.', '⏳  Loading..', '⏳  Loading...']
+        dots = ['Starting.', 'Starting..', 'Starting...']
         self._toggle_btn.configure(text=dots[self._loading_step % 3])
         self._loading_step += 1
         self._pulse_after = self.app.after(400, self._loading_animate)
@@ -728,6 +926,14 @@ class JarvisDashboard:
         self._status_text.configure(text='Offline', text_color=self.DIM)
         self._status_dot.configure(text_color=self.RED)
 
+        # Cleanup voice engine
+        if hasattr(self, '_voice_engine') and self._voice_engine:
+            try:
+                self._voice_engine.stop()
+            except Exception:
+                pass
+            self._voice_engine = None
+
         if self._ghost_root:
             try:
                 self._ghost_root.destroy()
@@ -758,13 +964,19 @@ class JarvisDashboard:
 
     # ── Engine Worker ─────────────────────────────────────────────
 
+    def _stop_voice(self):
+        """Immediately interrupt TTS."""
+        if hasattr(self, '_voice_engine') and self._voice_engine:
+            self._voice_engine.stop_speaking()
+
     def _engine_worker(self):
         try:
-            from context_engine import get_suggestion, prewarm_ollama
-            from audio_listener import AudioListener
-            from screen_reader import ScreenReader
-
             prewarm_ollama()
+
+            # ── Voice Engine ──
+            voice = VoiceEngine()
+            voice.start()
+            self._voice_engine = voice
 
             # Wait for ghost root
             import time
@@ -778,7 +990,6 @@ class JarvisDashboard:
 
             def _create_overlay():
                 try:
-                    from ghost_overlay import GhostOverlay
                     self._overlay = GhostOverlay(self._ghost_root)
                 except Exception as e:
                     print(f'⚠️  Overlay failed: {e}')
@@ -786,6 +997,10 @@ class JarvisDashboard:
 
             self.app.after(0, _create_overlay)
             overlay_ready.wait(timeout=5)
+
+            # ── OS Controller + Permission Manager ──
+            os_ctrl = OSController()
+            perm_mgr = PermissionManager(voice_engine=voice, overlay=self._overlay)
 
             screen = ScreenReader()
             try:
@@ -795,8 +1010,7 @@ class JarvisDashboard:
                 pass
 
             # Hotkey
-            try:
-                import keyboard
+            if HAS_KEYBOARD:
                 def on_hotkey():
                     try:
                         sb = screen.get_latest()
@@ -807,43 +1021,178 @@ class JarvisDashboard:
                             )
                             if sug and sug != 'SILENT':
                                 self._overlay.show_popup(sug, "hotkey")
+                                voice.speak(sug)
                     except Exception:
                         pass
-                keyboard.add_hotkey('ctrl+shift+j', on_hotkey, suppress=False)
-                print('🔑 Hotkey active: Ctrl+Shift+J')
-            except Exception:
-                pass
+                try:
+                    keyboard.add_hotkey('ctrl+shift+j', on_hotkey, suppress=False)
+                    print('🔑 Hotkey active: Ctrl+Shift+J')
+                except Exception:
+                    pass
 
             audio = AudioListener()
+            
+            def on_wake():
+                voice.play_beep()
+                self.app.after(0, lambda: self._listening_indicator.pack(side='left', padx=(10, 0)))
+
+            audio.set_wake_callback(on_wake)
             audio.start()
             screen.start()
             screen.interval = 4
-            print('🧠 JARVIS engine started from GUI')
+
+            import random
+            greetings = [
+                'Welcome back, sir... How was your day?',
+                'Hello again. How can we move forward today, hmm?',
+                'I am here, sir. How can I help you right now?',
+                'Welcome back. Anything you need me to look at?'
+            ]
+            voice.speak(random.choice(greetings))
+            print('[Core] JARVIS engine started — voice + OS control active')
+
+            # Flush any accidental startup noises from the queue
+            while not audio.output_queue.empty():
+                try: audio.output_queue.get_nowait()
+                except Exception: pass
 
             # Signal GUI that engine is ready
             self._engine_ready.set()
 
             while not self._stop_event.is_set():
                 try:
-                    audio_text = audio.output_queue.get(timeout=1)
-                    if audio_text:
-                        print(f'🎤 Heard: {audio_text[:80]}')
+                    msg = audio.output_queue.get(timeout=1)
+                    if not msg:
+                        continue
+
+                    # Hide listening indicator when audio capture finishes
+                    self.app.after(0, lambda: self._listening_indicator.pack_forget())
+
+                    # Handle both old string format and new dict format
+                    if isinstance(msg, str):
+                        msg_type = 'ambient'
+                        audio_text = msg
+                    else:
+                        msg_type = msg.get('type', 'ambient')
+                        audio_text = msg.get('text', '')
+
+                    if not audio_text or len(audio_text.strip()) < 3:
+                        continue
+
+                    print(f'🎤 [{msg_type}] {audio_text[:80]}')
+
+                    # ── COMMAND MODE ──
+                    if msg_type == 'command':
+                        cmd = parse_command(audio_text)
+                        
+                        def _execute_cmd(intent, params, tier, description):
+                            result = os_ctrl.execute(intent, params)
+                            success = result.get('success', False)
+                            message = result.get('message', 'Done')
+                            trigger = result.get('action_trigger')
+                            log_action(intent, params, 'success' if success else 'failed', tier)
+
+                            if success:
+                                voice.speak(message)
+                                voice.play_confirm_beep()
+                                if self._overlay:
+                                    self._overlay.show_popup(f'✅ {message}', description)
+                                    
+                                if trigger == 'analyze_screen':
+                                    import time
+                                    time.sleep(1.5)  # Let the browser open and render
+                                    sb = screen.get_latest()
+                                    if sb:
+                                        sug = get_suggestion(
+                                            "Read the emails on this screen. Summarize the unread or latest emails concisely. Be warm and professional.",
+                                            sb, force_vision=True
+                                        )
+                                        if sug and sug != 'SILENT':
+                                            self._overlay.show_popup(sug, "Email Summary")
+                                            voice.speak(sug)
+                            else:
+                                voice.speak(f'Failed. {message}')
+                                voice.play_error_beep()
+                                if self._overlay:
+                                    self._overlay.show_popup(f'❌ {message}', description)
+                            print(f'   → {"✅" if success else "❌"} {message}')
+
+                        if cmd and cmd.intent != 'unknown':
+                            # Known command — execute via OS controller
+                            description = get_human_description(cmd)
+                            print(f'⚡ Command: {cmd.intent} | {description}')
+                            perm_mgr.check_permission(
+                                intent=cmd.intent,
+                                tier=cmd.tier,
+                                description=description,
+                                on_approved=lambda: _execute_cmd(cmd.intent, cmd.params, cmd.tier, description),
+                                on_denied=lambda d=description: voice.speak(f'Cancelled: {d}')
+                            )
+                        else:
+                            # Unknown command — use LLM to interpret
+                            response = get_command_response(audio_text)
+                            if response:
+                                import json
+                                import re
+                                match = re.search(r'\{.*\}', response, re.DOTALL)
+                                if match:
+                                    try:
+                                        cmd_data = json.loads(match.group(0))
+                                        intent = cmd_data.get('intent')
+                                        params = cmd_data.get('params', {})
+                                        # Default LLM dynamic intents to confirm for safety
+                                        tier = cmd_data.get('tier', 'confirm')
+                                        if intent:
+                                            description = f"AI Command: {intent}"
+                                            print(f'⚡ Dynamic Command: {intent} | {params}')
+                                            perm_mgr.check_permission(
+                                                intent=intent,
+                                                tier=tier,
+                                                description=description,
+                                                on_approved=lambda: _execute_cmd(intent, params, tier, description),
+                                                on_denied=lambda d=description: voice.speak('Cancelled AI command')
+                                            )
+                                            continue
+                                    except Exception as e:
+                                        print(f"⚠️ Failed to parse AI JSON: {e}")
+
+                                # If no JSON or parsing failed, just speak the response
+                                clean_resp = re.sub(r'\{.*\}', '', response, flags=re.DOTALL).strip()
+                                if clean_resp:
+                                    voice.speak(clean_resp)
+                                    if self._overlay:
+                                        self._overlay.show_popup(clean_resp, audio_text)
+                            print(f'   → LLM: {response[:80] if response else "(empty)"}')
+
+                    # ── AMBIENT MODE ── (existing behavior)
+                    else:
                         screen_b64 = screen.get_latest()
                         suggestion = get_suggestion(audio_text, screen_b64)
-                        if suggestion != 'SILENT' and self._overlay:
-                            print(f'⚡ Suggestion: {suggestion}')
-                            self._overlay.show_popup(suggestion, audio_text)
+                        if suggestion and suggestion != 'SILENT':
+                            print(f'[AI] Suggestion: {suggestion[:80]}')
+                            if self._overlay:
+                                self._overlay.show_popup(suggestion, audio_text)
+                            voice.speak(suggestion)
                         else:
                             print('   (SILENT)')
-                except Exception:
+
+                except Exception as e:
+                    if not self._stop_event.is_set():
+                        # Don't print queue.Empty errors as they happen every second
+                        if "Empty" not in str(type(e)):
+                            print(f'[Warn] Loop error: {e}')
                     continue
 
+            # Cleanup
             audio.stop()
             screen.stop()
-            print('🧠 JARVIS engine stopped')
+            voice.stop()
+            print('[Core] JARVIS engine stopped')
 
         except Exception as e:
-            print(f'⚠️  Engine error: {e}')
+            print(f'[Error] Engine error: {e}')
+            import traceback
+            traceback.print_exc()
             self.app.after(0, self._stop_engine)
 
     # ══════════════════════════════════════════════════════════════
