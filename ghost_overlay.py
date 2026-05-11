@@ -1,13 +1,6 @@
 # PRIVACY: RAM-only. Zero disk I/O.
 import tkinter as tk
 import queue
-import psutil
-
-try:
-    import pygetwindow as gw
-    HAS_PYGETWINDOW = True
-except ImportError:
-    HAS_PYGETWINDOW = False
 
 # --- CONSTANTS ---
 class HistoryPanel:
@@ -18,30 +11,30 @@ class HistoryPanel:
         self.window.overrideredirect(True)
         self.window.attributes('-topmost', True)
         self.window.attributes('-alpha', 0.95)
-        self.window.configure(bg='#0C1220')
+        self.window.configure(bg='#18181B')
         
         # Border
         outer = tk.Frame(self.window, bg='#1E293B', padx=1, pady=1)
         outer.pack(fill='both', expand=True)
         
-        self.inner = tk.Frame(outer, bg='#0C1220', padx=12, pady=12)
+        self.inner = tk.Frame(outer, bg='#18181B', padx=12, pady=12)
         self.inner.pack(fill='both', expand=True)
         
         # Header area with close button
-        header_frame = tk.Frame(self.inner, bg='#0C1220')
+        header_frame = tk.Frame(self.inner, bg='#18181B')
         header_frame.pack(fill='x', pady=(0, 10))
         
         title = tk.Label(
-            header_frame, text="🧠 SAVED SUGGESTIONS",
-            font=("Consolas", 9, "bold"),
-            fg='#9D4EDD', bg='#0C1220', anchor='w'
+            header_frame, text="SAVED",
+            font=("Cascadia Code", 9, "bold"),
+            fg='#10B981', bg='#18181B', anchor='w'
         )
         title.pack(side='left')
         
         close_btn = tk.Label(
             header_frame, text="✕",
             font=("Consolas", 10),
-            fg='#888888', bg='#0C1220', cursor="hand2"
+            fg='#888888', bg='#18181B', cursor="hand2"
         )
         close_btn.pack(side='right')
         close_btn.bind("<Button-1>", lambda e: self.hide())
@@ -89,7 +82,7 @@ class HistoryPanel:
                 from context_engine import record_feedback
                 record_feedback(text, score)
                 # Visual acknowledge
-                btn_up.config(fg='#9D4EDD' if score > 0 else '#555555')
+                btn_up.config(fg='#10B981' if score > 0 else '#555555')
                 btn_down.config(fg='#FF4D4D' if score < 0 else '#555555')
                 # Disable further clicks on this item
                 btn_up.unbind("<Button-1>")
@@ -181,17 +174,17 @@ class PopupWindow:
         
         self.window.attributes('-topmost', True)
         self.window.attributes('-alpha', 0.92)  # Glass transparency
-        self.window.configure(bg='#0C1220')
+        self.window.configure(bg='#18181B')
         
         # Border simulation (bright 1px frame)
         self.outer = tk.Frame(self.window, bg='#1E293B', padx=1, pady=1)
         self.outer.pack(fill='both', expand=True)
         
-        self.inner = tk.Frame(self.outer, bg='#0C1220', padx=18, pady=14)
+        self.inner = tk.Frame(self.outer, bg='#18181B', padx=18, pady=14)
         self.inner.pack(fill='both', expand=True)
         
         # Header with neon glow effect via layered labels
-        self.header_frame = tk.Frame(self.inner, bg='#0C1220', height=20)
+        self.header_frame = tk.Frame(self.inner, bg='#18181B', height=20)
         self.header_frame.pack(fill='x', pady=(0, 6))
         self.header_frame.pack_propagate(False)
         
@@ -200,17 +193,17 @@ class PopupWindow:
         
         # Glow layer (behind)
         self.label_glow = tk.Label(
-            self.header_frame, text="⚡  JARVIS",
-            font=("Consolas", 9, "bold"),
-            fg='#7B2CBF', bg='#0C1220', anchor='w'
+            self.header_frame, text="JARVIS",
+            font=("Cascadia Code", 9, "bold"),
+            fg='#059669', bg='#18181B', anchor='w'
         )
         self.label_glow.place(x=0, y=1, relwidth=0.75, relheight=1.0)
         
         # Main header (front)
         self.label_header = tk.Label(
-            self.header_frame, text="⚡  JARVIS",
-            font=("Consolas", 9, "bold"),
-            fg='#9D4EDD', bg='#0C1220', anchor='w'
+            self.header_frame, text="JARVIS",
+            font=("Cascadia Code", 9, "bold"),
+            fg='#10B981', bg='#18181B', anchor='w'
         )
         self.label_header.place(x=0, y=0, relwidth=0.75, relheight=1.0)
         
@@ -218,7 +211,7 @@ class PopupWindow:
         self.label_timestamp = tk.Label(
             self.header_frame, text=timestamp,
             font=("Consolas", 8),
-            fg='#3A3A3A', bg='#0C1220', anchor='e', padx=4
+            fg='#3A3A3A', bg='#18181B', anchor='e', padx=4
         )
         self.label_timestamp.place(relx=0.75, y=0, relwidth=0.25, relheight=1.0)
         
@@ -227,7 +220,7 @@ class PopupWindow:
             self.regen_btn = tk.Label(
                 self.header_frame, text="⟲ REGENERATE",
                 font=("Consolas", 8, "bold"),
-                fg='#888888', bg='#0C1220', cursor="hand2"
+                fg='#888888', bg='#18181B', cursor="hand2"
             )
             self.regen_btn.pack(side='right')
             self.regen_btn.bind("<Button-1>", lambda e: self.on_regenerate())
@@ -286,7 +279,7 @@ class PopupWindow:
             # Countdown progress bar
             self._bar_frame = tk.Frame(self.inner, bg='#1A1A2A', height=2)
             self._bar_frame.pack(fill='x', pady=(8, 0))
-            self._bar_fill = tk.Frame(self._bar_frame, bg='#9D4EDD', height=2)
+            self._bar_fill = tk.Frame(self._bar_frame, bg='#10B981', height=2)
             self._bar_fill.place(x=0, y=0, relwidth=1.0, height=2)
             self._bar_after_id = None
             
@@ -319,9 +312,9 @@ class PopupWindow:
             # Update main label to show issue only
             if issue_text:
                 self.label_text.config(
-                    text=f"⚠️ {issue_text}",
-                    fg='#FF6B6B',  # red for issue
-                    font=("Consolas", 10)
+                    text=f"[!] {issue_text}",
+                    fg='#FF6B6B',
+                    font=("Cascadia Code", 10)
                 )
 
             # Code fix frame
@@ -334,7 +327,7 @@ class PopupWindow:
                     fix_frame,
                     text=fix_text,
                     font=("Consolas", 10),
-                    fg='#9D4EDD',
+                    fg='#10B981',
                     bg='#161B22',
                     wraplength=300,
                     justify='left',
@@ -347,7 +340,7 @@ class PopupWindow:
                     fix_frame,
                     text="⎘",
                     font=("Consolas", 11, "bold"),
-                    fg='#9D4EDD',
+                    fg='#10B981',
                     bg='#0D1117',
                     activebackground='#1C2128',
                     activeforeground='#FFFFFF',
@@ -424,7 +417,7 @@ class PopupWindow:
                 self._bar_fill.place(x=0, y=0, relwidth=max(fraction, 0.0), height=2)
                 # Color shift: green → yellow → red
                 if fraction > 0.5:
-                    color = '#9D4EDD'
+                    color = '#10B981'
                 elif fraction > 0.25:
                     color = '#FFB347'
                 else:
@@ -695,24 +688,24 @@ class ChatPanel:
         self.window.attributes('-topmost', True)
         self.window.lift()  # ensure above all other windows
         self.window.attributes('-alpha', 0.95)
-        self.window.configure(bg='#060B14')
+        self.window.configure(bg='#09090B')
         
         # Outer border
         outer = tk.Frame(self.window, bg='#1E293B', padx=1, pady=1)
         outer.pack(fill='both', expand=True)
         
-        inner = tk.Frame(outer, bg='#060B14', padx=0, pady=0)
+        inner = tk.Frame(outer, bg='#09090B', padx=0, pady=0)
         inner.pack(fill='both', expand=True)
         
         # Header frame with close button
-        header_frame = tk.Frame(inner, bg='#060B14')
+        header_frame = tk.Frame(inner, bg='#09090B')
         header_frame.pack(fill='x')
         
         self.header = tk.Label(
             header_frame,
             text=f"💬 CHAT  ({self.MAX_MESSAGES}/5 messages left)",
             font=("Consolas", 9, "bold"),
-            fg='#9D4EDD', bg='#060B14',
+            fg='#9D4EDD', bg='#09090B',
             anchor='w', padx=12, pady=6
         )
         self.header.pack(side='left', fill='x', expand=True)
@@ -721,7 +714,7 @@ class ChatPanel:
             header_frame,
             text="✕",
             font=("Consolas", 10, "bold"),
-            fg='#888888', bg='#060B14',
+            fg='#888888', bg='#09090B',
             cursor='hand2',
             padx=10, pady=6
         )
@@ -734,13 +727,13 @@ class ChatPanel:
         tk.Frame(inner, bg='#1E293B', height=1).pack(fill='x')
         
         # Chat history — scrollable text area
-        self.chat_frame = tk.Frame(inner, bg='#060B14')
+        self.chat_frame = tk.Frame(inner, bg='#09090B')
         self.chat_frame.pack(fill='both', expand=True, padx=8, pady=6)
         
         self.chat_text = tk.Text(
             self.chat_frame,
             font=("Consolas", 10),
-            bg='#060B14',
+            bg='#09090B',
             fg='#FFFFFF',
             relief='flat',
             bd=0,
@@ -761,7 +754,7 @@ class ChatPanel:
         tk.Frame(inner, bg='#1E293B', height=1).pack(fill='x')
         
         # Input row
-        input_frame = tk.Frame(inner, bg='#060B14', padx=8, pady=6)
+        input_frame = tk.Frame(inner, bg='#09090B', padx=8, pady=6)
         input_frame.pack(fill='x')
         
         self.input_var = tk.StringVar()
@@ -786,7 +779,7 @@ class ChatPanel:
             text="▶",
             font=("Consolas", 11, "bold"),
             fg='#9D4EDD',
-            bg='#0C1220',
+            bg='#18181B',
             activebackground='#1C2128',
             activeforeground='#FFFFFF',
             relief='flat',
@@ -843,10 +836,10 @@ class ChatPanel:
         self.chat_text.config(state='normal')
         
         if sender == "JARVIS":
-            self.chat_text.insert('end', f"⚡ JARVIS: ", 'jarvis')
+            self.chat_text.insert('end', "JARVIS: ", 'jarvis')
             self.chat_text.insert('end', f"{message}\n\n", 'jarvis')
         elif sender == "You":
-            self.chat_text.insert('end', f"You: ", 'user')
+            self.chat_text.insert('end', "You: ", 'user')
             self.chat_text.insert('end', f"{message}\n\n", 'user')
         else:
             self.chat_text.insert('end', f"{message}\n", 'system')
@@ -868,16 +861,16 @@ class ChatPanel:
         
         # Check message limit
         if self.message_count >= self.MAX_MESSAGES:
-            self._add_message("system", "⚠️ Chat limit reached (5/5). Start a new session.")
+            self._add_message("system", "Chat limit reached (5/5). Start a new session.")
             return
         
         self.message_count += 1
         remaining = self.MAX_MESSAGES - self.message_count
         
         # Update header
-        color = '#FF6B6B' if remaining <= 1 else '#9D4EDD'
+        color = '#FF6B6B' if remaining <= 1 else '#10B981'
         self.header.config(
-            text=f"💬 CHAT  ({remaining}/5 messages left)",
+            text=f"CHAT  ({remaining}/5 messages left)",
             fg=color
         )
         
@@ -926,7 +919,7 @@ class ChatPanel:
             # Update UI in main thread
             self.window.after(0, lambda: self._display_response(response))
             
-        except Exception as e:
+        except Exception:
             error_msg = "Something went wrong — try again."
             self.window.after(0, lambda: self._display_response(error_msg))
 
@@ -1076,9 +1069,16 @@ class GhostOverlay:
         y_base = self.root.winfo_screenheight() - 60
         current_y = y_base
         
+        # Top-of-screen boundary limit
+        min_y = 40
+        
         # Iterate from newest to oldest
         for popup in reversed(self._popup_stack):
             current_y -= popup.height
+            
+            # Clamp to top boundary
+            if current_y < min_y:
+                current_y = min_y
             
             if popup.current_y is None:
                 # newly created popup
@@ -1113,3 +1113,180 @@ class GhostOverlay:
         if popup in self._popup_stack:
             self._popup_stack.remove(popup)
             self._recalculate_stack()
+
+    def show_permission_popup(self, text, on_approve, on_deny, timeout_ms=15000, is_admin=False):
+        """Show a permission confirmation popup with YES/NO buttons.
+        
+        Args:
+            text:       Permission description text
+            on_approve: Callback when approved
+            on_deny:    Callback when denied
+            timeout_ms: Auto-deny after this many ms
+            is_admin:   True for red admin-level styling
+        """
+        # Queue to main thread
+        self.root.after(0, lambda: self._create_permission_popup(
+            text, on_approve, on_deny, timeout_ms, is_admin
+        ))
+
+    def _create_permission_popup(self, text, on_approve, on_deny, timeout_ms, is_admin):
+        """Create permission popup on the main thread."""
+        perm = PermissionPopup(self.root, text, on_approve, on_deny, timeout_ms, is_admin)
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        px = sw // 2 - 220
+        py = sh // 2 - 100
+        perm.window.geometry(f"440x200+{px}+{py}")
+        perm.window.deiconify()
+        perm.window.lift()
+
+
+class PermissionPopup:
+    """Confirmation dialog for OS commands — supports AUTO/CONFIRM/ADMIN tiers."""
+
+    def __init__(self, parent_root, text, on_approve, on_deny, timeout_ms=15000, is_admin=False):
+        self.window = tk.Toplevel(parent_root)
+        self._approved = False
+        self._closed = False
+        self._on_approve = on_approve
+        self._on_deny = on_deny
+
+        self.window.overrideredirect(True)
+        self.window.attributes('-topmost', True)
+        self.window.attributes('-alpha', 0.96)
+
+        accent = '#EF4444' if is_admin else '#F59E0B'  # Red for admin, amber for confirm
+        bg = '#18181B'
+
+        self.window.configure(bg=bg)
+
+        # Border
+        outer = tk.Frame(self.window, bg=accent, padx=2, pady=2)
+        outer.pack(fill='both', expand=True)
+
+        inner = tk.Frame(outer, bg=bg, padx=20, pady=16)
+        inner.pack(fill='both', expand=True)
+
+        # Header
+        tier_label = "🔴 ADMIN CONFIRMATION" if is_admin else "🟡 PERMISSION REQUIRED"
+        tk.Label(
+            inner, text=tier_label,
+            font=("Consolas", 10, "bold"),
+            fg=accent, bg=bg, anchor='w'
+        ).pack(fill='x', pady=(0, 8))
+
+        # Description
+        tk.Label(
+            inner, text=text.split('\n')[0] if '\n' in text else text,
+            font=("Segoe UI", 12),
+            fg='#FFFFFF', bg=bg,
+            wraplength=380, justify='left', anchor='w'
+        ).pack(fill='x', pady=(0, 4))
+
+        if is_admin:
+            tk.Label(
+                inner, text="⚠️ This action may be irreversible",
+                font=("Consolas", 9),
+                fg='#EF4444', bg=bg, anchor='w'
+            ).pack(fill='x', pady=(0, 8))
+
+        # Countdown bar
+        self._bar_frame = tk.Frame(inner, bg='#1A1A2A', height=3)
+        self._bar_frame.pack(fill='x', pady=(4, 10))
+        self._bar_fill = tk.Frame(self._bar_frame, bg=accent, height=3)
+        self._bar_fill.place(x=0, y=0, relwidth=1.0, height=3)
+
+        # Buttons
+        btn_row = tk.Frame(inner, bg=bg)
+        btn_row.pack(fill='x')
+
+        # YES button
+        yes_btn = tk.Button(
+            btn_row, text="✓  YES, DO IT",
+            font=("Segoe UI", 11, "bold"),
+            fg='#FFFFFF', bg='#22C55E',
+            activebackground='#16A34A', activeforeground='#FFFFFF',
+            relief='flat', bd=0, padx=20, pady=8,
+            cursor='hand2',
+            command=self._approve
+        )
+        yes_btn.pack(side='left', padx=(0, 8))
+
+        # NO button
+        no_btn = tk.Button(
+            btn_row, text="✕  CANCEL",
+            font=("Segoe UI", 11, "bold"),
+            fg='#FFFFFF', bg='#64748B',
+            activebackground='#475569', activeforeground='#FFFFFF',
+            relief='flat', bd=0, padx=20, pady=8,
+            cursor='hand2',
+            command=self._deny
+        )
+        no_btn.pack(side='left')
+
+        # Countdown timer
+        secs = timeout_ms // 1000
+        self._timer_label = tk.Label(
+            btn_row, text=f"Auto-cancel: {secs}s",
+            font=("Consolas", 9),
+            fg='#64748B', bg=bg, anchor='e'
+        )
+        self._timer_label.pack(side='right')
+
+        # Start countdown
+        self._countdown(timeout_ms, timeout_ms, accent)
+
+        # Auto-deny timeout
+        self._timeout_id = self.window.after(timeout_ms, self._deny)
+
+    def _countdown(self, remaining_ms, total_ms, color):
+        """Animate countdown bar and timer label."""
+        if self._closed:
+            return
+        fraction = remaining_ms / total_ms
+        self._bar_fill.place(x=0, y=0, relwidth=max(fraction, 0.0), height=3)
+        secs_left = max(0, remaining_ms // 1000)
+        self._timer_label.config(text=f"Auto-cancel: {secs_left}s")
+
+        # Color shift
+        if fraction < 0.3:
+            self._bar_fill.config(bg='#EF4444')
+        elif fraction < 0.6:
+            self._bar_fill.config(bg='#F59E0B')
+
+        if remaining_ms > 0:
+            self.window.after(200, self._countdown, remaining_ms - 200, total_ms, color)
+
+    def _approve(self):
+        if self._closed:
+            return
+        self._closed = True
+        self._approved = True
+        if self._timeout_id:
+            try:
+                self.window.after_cancel(self._timeout_id)
+            except Exception:
+                pass
+        try:
+            self.window.destroy()
+        except Exception:
+            pass
+        if self._on_approve:
+            self._on_approve()
+
+    def _deny(self):
+        if self._closed:
+            return
+        self._closed = True
+        if self._timeout_id:
+            try:
+                self.window.after_cancel(self._timeout_id)
+            except Exception:
+                pass
+        try:
+            self.window.destroy()
+        except Exception:
+            pass
+        if self._on_deny:
+            self._on_deny()
+
