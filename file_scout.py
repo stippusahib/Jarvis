@@ -1,6 +1,5 @@
 # PRIVACY: RAM-only. Zero disk I/O.
 import pathlib
-import gc
 from datetime import datetime, timedelta
 
 SEARCH_PATHS = [

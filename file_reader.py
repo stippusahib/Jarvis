@@ -1,5 +1,4 @@
 # PRIVACY: RAM-only. Zero disk I/O.
-import io
 import gc
 import pathlib
 

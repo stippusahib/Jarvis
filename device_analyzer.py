@@ -3,7 +3,6 @@
 import os
 import platform
 import subprocess
-import json
 
 import settings_manager
 
