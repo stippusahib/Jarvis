@@ -1,5 +1,5 @@
 faster-whisper
-pyaudio
+sounddevice
 mss
 Pillow
 requests
@@ -10,3 +10,13 @@ torch
 pypdf
 python-docx
 keyboard
+customtkinter
+psutil
+pygetwindow
+noisereduce
+pyttsx3
+edge-tts
+pyautogui
+pycaw
+comtypes
+screen-brightness-control
